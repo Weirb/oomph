@@ -1,3 +1,6 @@
 .vscode/
 .deps/
 RESLT/
+Makefile
+Makefile.in
+*.o
