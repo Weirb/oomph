@@ -8,7 +8,7 @@ noinst_PROGRAMS= main
 main_SOURCES = main.cc
 
 # Requried libraries
-main_LDADD = -L@libdir@ -lhelmholtz -lmeshes -lpoisson -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+main_LDADD = -L@libdir@ -lpml_helmholtz -lmeshes -lpoisson -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 # Include path for library headers
 AM_CPPFLAGS += -I@includedir@  
