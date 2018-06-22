@@ -36,9 +36,7 @@ libbilly_la_SOURCES = $(headers_and_sources)
 include_HEADERS = $(libname).h 
 
 #Here's the subdirectory where the actual header files are placed
-#library_includedir=$(includedir)/billy_src
-library_includedir=/home/billy/source/oomph/user_drivers/billy/src
-#library_includedir=$(abs_src_dir)
+library_includedir=$(abs_top_builddir)/user_drivers/billy/src
 
 #These are the header files that are to be placed in subdirectory
 library_include_HEADERS=$(headers) 
@@ -59,8 +57,8 @@ AM_CPPFLAGS += -I$(abs_top_builddir)/src
 $(libname).h: dummy_$(libname).h
 
 dummy_$(libname).h:  $(headers)
-	echo  $(libname) $(headers) > all_$(libname).aux
-	$(AWK) -f $(top_builddir)/bin/headers.awk < \
+	echo $(headers) > all_$(libname).aux
+	$(AWK) -f ../headers.awk < \
 	       all_$(libname).aux > $(libname).h
 	rm all_$(libname).aux
 
