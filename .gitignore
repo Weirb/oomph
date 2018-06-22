@@ -9,3 +9,4 @@ Makefile.in
 *.a
 *.la*
 *.so*
+billy.h
