@@ -1,6 +1,11 @@
 .vscode/
 .deps/
+.libs/
 RESLT/
 Makefile
 Makefile.in
 *.o
+*.lo
+*.a
+*.la*
+*.so*
