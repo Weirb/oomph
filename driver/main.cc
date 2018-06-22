@@ -47,7 +47,7 @@ Also need to change the equations
 #include "generic.h"
 
 // The Helmholtz equations and complex-valued multigrid machinery
-#include "pml_helmholtz.h"
+#include "../src/billy.h"
 
 // The mesh
 #include "meshes/simple_cubic_mesh.h"
@@ -289,16 +289,16 @@ namespace Smoother_Factory_Function_Helper
 /// Problem class
 //========================================================================
 template<class ELEMENT>
-class PMLStructuredCubicHelmholtz : public HelmholtzMGProblem
+class PMLFourierDecomposedHelmholtzProblem : public HelmholtzMGProblem
 {
 
 public:
 
  /// Constructor
- PMLStructuredCubicHelmholtz();
+ PMLFourierDecomposedHelmholtzProblem();
 
  /// Destructor (empty)
- ~PMLStructuredCubicHelmholtz();
+ ~PMLFourierDecomposedHelmholtzProblem();
 
  /// Doc the solution
  void doc_solution();
@@ -332,13 +332,14 @@ private:
 
  /// Pointer to the "bulk" mesh
  // RefineableSimpleCubicMesh<ELEMENT>* Bulk_mesh_pt;
- RefineableRectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
+//  RefineableRectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
+ RefineableQuadMesh<ELEMENT>* Bulk_mesh_pt;
 
  /// Overload the make_new_problem function to return an object of this class
  HelmholtzMGProblem* make_new_problem()
  {
   // Return a new problem pointer
-  return new PMLStructuredCubicHelmholtz<ELEMENT>;
+  return new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
  }
 
  /// \short Overload the mg_bulk_mesh_pt function to return a pointer to the
@@ -351,13 +352,13 @@ private:
  
  /// Trace file
  ofstream Trace_file;
-}; // End of PMLStructuredCubicHelmholtz class
+}; // End of PMLFourierDecomposedHelmholtzProblem class
 
 //==============================================start_of_constructor======
 /// Constructor for Helmholtz problem
 //========================================================================
 template<class ELEMENT>
-PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
+PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProblem()
 {
  // Indicate that the problem is nonlinear to ensure the residual is
  // calculated at the end of the iteration
@@ -422,7 +423,7 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
    if (GlobalParameters::Enable_test_pml_mapping_flag)
    {
     // Set the PML mapping function
-    el_pt->pml_mapping_pt()=GlobalParameters::Test_pml_mapping_pt;
+    // el_pt->pml_mapping_pt()=GlobalParameters::Test_pml_mapping_pt;
    }
   } // if (el_pt!=0)
  } // for (unsigned e=0;e<n_element;e++)
@@ -442,7 +443,7 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
 /// Destructor for Helmholtz problem
 //========================================================================
 template<class ELEMENT>
-PMLStructuredCubicHelmholtz<ELEMENT>::~PMLStructuredCubicHelmholtz()
+PMLFourierDecomposedHelmholtzProblem<ELEMENT>::~PMLFourierDecomposedHelmholtzProblem()
 {
  // If we're using GMRES & MG as the linear solver
  if (GlobalParameters::Linear_solver_flag==1)
@@ -474,13 +475,13 @@ PMLStructuredCubicHelmholtz<ELEMENT>::~PMLStructuredCubicHelmholtz()
  // Set the pointer to null
  Bulk_mesh_pt=0;
  
-} // End of ~PMLStructuredCubicHelmholtz
+} // End of ~PMLFourierDecomposedHelmholtzProblem
 
 //=======set_gmres_multigrid_solver=======================================
 /// Build and set GMRES preconditioner by multigrid as the linear solver
 //========================================================================
 template<class ELEMENT>
-void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
+void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::set_gmres_multigrid_solver()
 {
  // Create linear solver
  HelmholtzFGMRESMG<CRDoubleMatrix>* solver_pt=
@@ -547,7 +548,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
 /// Apply boundary conditions
 //========================================================================
 template<class ELEMENT>
-void PMLStructuredCubicHelmholtz<ELEMENT>::apply_boundary_conditions()
+void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::apply_boundary_conditions()
 {
  // Find the number of elements in the mesh
  unsigned n_element=Bulk_mesh_pt->nelement();
@@ -661,7 +662,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::apply_boundary_conditions()
 /// Enable the PML mapping function for each node in the PML region
 //========================================================================
 template<class ELEMENT>
-void PMLStructuredCubicHelmholtz<ELEMENT>::enable_pmls()
+void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::enable_pmls()
 {
  // Find the number of elements in the mesh
  unsigned n_element=Bulk_mesh_pt->nelement();
@@ -699,7 +700,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::enable_pmls()
    if (GlobalParameters::Enable_test_pml_mapping_flag)
    {
     // Set the PML mapping function
-    el_pt->pml_mapping_pt()=GlobalParameters::Test_pml_mapping_pt;
+    // el_pt->pml_mapping_pt()=GlobalParameters::Test_pml_mapping_pt;
    }
   
    // Get the (Eulerian) coordinates of the centre of the element
@@ -736,7 +737,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::enable_pmls()
 /// Actions after adapt: Re-apply the boundary conditions
 //========================================================================
 template<class ELEMENT>
-void PMLStructuredCubicHelmholtz<ELEMENT>::actions_after_adapt()
+void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::actions_after_adapt()
 {
  // Complete the build of all elements so they are fully functional: 
  //-----------------------------------------------------------------
@@ -771,7 +772,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::actions_after_adapt()
 /// Doc the solution: doc_info contains labels/output directory etc.
 //========================================================================
 template<class ELEMENT>
-void PMLStructuredCubicHelmholtz<ELEMENT>::doc_solution()
+void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::doc_solution()
 {
  // Tell the user
  oomph_info << "\nDocumentation step: "
@@ -1023,7 +1024,7 @@ int main(int argc,char **argv)
  //  typedef RefineableQPMLHelmholtzElement<3,2> ELEMENT;
     
  //  // Set the problem pointer
- //  problem_pt=new PMLStructuredCubicHelmholtz<ELEMENT>;
+ //  problem_pt=new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
  // }
  // else if (GlobalParameters::Nnode_1d==3)
  // {
@@ -1032,7 +1033,7 @@ int main(int argc,char **argv)
  //  typedef RefineableQPMLHelmholtzElement<3,3> ELEMENT;
   
  //  // Set the problem pointer
- //  problem_pt=new PMLStructuredCubicHelmholtz<ELEMENT>;
+ //  problem_pt=new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
  // }  
  // else if (GlobalParameters::Nnode_1d==4)
  // {
@@ -1041,7 +1042,7 @@ int main(int argc,char **argv)
  //  typedef RefineableQPMLHelmholtzElement<3,4> ELEMENT;
   
  //  // Set the problem pointer
- //  problem_pt=new PMLStructuredCubicHelmholtz<ELEMENT>;
+ //  problem_pt=new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
  // }
  // else
  // {
@@ -1052,9 +1053,11 @@ int main(int argc,char **argv)
  // }
 
  typedef RefineableQPMLHelmholtzElement<2,2> ELEMENT;
+//  typedef RefineableQPMLFourierDecomposedHelmholtzElement<2> ELEMENT;
+//  typedef QPMLFourierDecomposedHelmholtzElement<2> ELEMENT;
 
  // Set the problem pointer
- problem_pt=new PMLStructuredCubicHelmholtz<ELEMENT>;
+ problem_pt=new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
 
  //------------------ 
  // Solve the problem
