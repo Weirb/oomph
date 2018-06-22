@@ -8,7 +8,7 @@ noinst_PROGRAMS= main
 main_SOURCES = main.cc
 
 # Requried libraries
-main_LDADD = -L@libdir@ -lbilly -lpml_helmholtz -lmeshes -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+main_LDADD = -L@libdir@ -lbilly -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 # Include path for library headers
-AM_CPPFLAGS += -I@includedir@ -I/home/billy/source/oomph/user_drivers/billy/src
+AM_CPPFLAGS += -I@includedir@ -I$(abs_top_builddir)/user_drivers/billy/src
