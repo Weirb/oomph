@@ -615,6 +615,45 @@ protected:
   /// pml_laplace_factor is used in the residual contribution from the laplace
   /// operator, similarly pml_k_squared_factor is used in the contribution from
   /// the k^2 of the Helmholtz operator.
+
+    /// \short Compute complex variable r at position x[0] and
+  /// integration point ipt
+  void compute_complex_r(const unsigned &ipt,
+                         const Vector<double> &x,
+                         std::complex<double> &complex_r)
+  {
+    // // Cache current position r
+    // double r = x[0];
+
+    // /// The complex r variable is only imaginary on two
+    // /// conditions: First, the decaying nature of the
+    // /// pml layers is active.  Secondly, the
+    // /// integration point is contained in the right pml
+    // /// layer or the two corner pml layers.
+
+    // // If the complex r variable is imaginary
+    // if (this->Pml_is_enabled && (this->Pml_direction_active[0]))
+    // {
+    //   double nu = x[0] - Pml_inner_boundary[0];
+    //   double pml_width = Pml_outer_boundary[0] - Pml_inner_boundary[0];
+    //   double k_squared_local = k_squared();
+
+    //   // Determine the complex r variable
+    //   complex_r = Pml_mapping_and_transformed_coordinate_pt->transformed_coordinate(nu, pml_width, Pml_inner_boundary[0], k_squared_local);
+    // }
+    // else
+    // {
+    //   // The complex r variable is infact purely real, and
+    //   // is equal to x[0]
+    //   complex_r = std::complex<double>(r, 0.0);
+    // }
+
+    // Temporary solution to get the code to compile..
+    double r = x[0];
+    complex_r = std::complex<double>(r, 0.0);
+
+  } // end of compute_complex_r
+
   void compute_pml_coefficients(
       const unsigned &ipt,
       const Vector<double> &x,
