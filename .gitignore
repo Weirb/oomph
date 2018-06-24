@@ -10,3 +10,4 @@ Makefile.in
 *.la*
 *.so*
 billy.h
+main
