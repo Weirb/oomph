@@ -134,7 +134,8 @@ namespace GlobalParameters
  double Element_width=Lx/double(Nx);
  
  /// Length of cube in each direction
- double Pml_thickness=Element_width;
+//  double Pml_thickness=Element_width;
+ double Pml_thickness=0;
  
  /// Store the value of Pi
  double Pi=MathematicalConstants::Pi;
@@ -422,7 +423,7 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
  apply_boundary_conditions();
  
  // Enable the PML mapping in elements in the PML region
- enable_pmls();
+//  enable_pmls();
  
  // Setup equation numbering scheme
  assign_eqn_numbers(); 
@@ -723,7 +724,7 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::actions_after_adapt()
  apply_boundary_conditions();
 
  // Re-enable the PML mapping in elements in the PML region
- enable_pmls();
+//  enable_pmls();
 
  // Rebuild the mesh
  rebuild_global_mesh();
