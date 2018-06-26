@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd driver
+libtool --mode=execute gdb main
