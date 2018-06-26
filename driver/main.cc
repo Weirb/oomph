@@ -155,6 +155,9 @@ namespace GlobalParameters
   /// Wavenumber (also known as k), k=omega/c
   Wavenumber=sqrt(K_squared);
  }
+
+ /// Fourier wavenumber
+ int N_fourier_wavenumber = 4;
  
  /// The x and y coordinate of the centre of the cube 
  double Centre=Lx/2.0;
@@ -418,6 +421,9 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
   {
    // Set the wavenumber function pointer
    el_pt->k_squared_pt()=&GlobalParameters::K_squared;
+
+   // Set the Fourier wavenumber
+   el_pt->n_fourier_wavenumber_pt()=&GlobalParameters::N_fourier_wavenumber;
    
    // If we're using Jonathon's new test mapping
    if (GlobalParameters::Enable_test_pml_mapping_flag)
@@ -755,6 +761,9 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::actions_after_adapt()
   {
    // Set the wavenumber function pointer
    el_pt->k_squared_pt()=&GlobalParameters::K_squared;
+
+   // Set the Fourier wavenumber
+   el_pt->n_fourier_wavenumber_pt()=&GlobalParameters::N_fourier_wavenumber;
   }
  } // for (unsigned e=0;e<n_element;e++)
  
