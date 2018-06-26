@@ -131,21 +131,21 @@ public:
   double *&alpha_pt() { return Alpha_pt; }
 
   /// Get pointer to Fourier wavenumber
-  int *&pml_fourier_wavenumber_pt()
+  int *&n_fourier_wavenumber_pt()
   {
-    return N_pml_fourier_pt;
+    return N_fourier_wavenumber_pt;
   }
 
   /// Get the Fourier wavenumber
   int pml_fourier_wavenumber()
   {
-    if (N_pml_fourier_pt == 0)
+    if (N_fourier_wavenumber_pt == 0)
     {
       return 0;
     }
     else
     {
-      return *N_pml_fourier_pt;
+      return *N_fourier_wavenumber_pt;
     }
   }
 
@@ -800,7 +800,7 @@ protected:
   static double Default_Physical_Constant_Value;
 
   /// Pointer to Fourier wave number
-  int *N_pml_fourier_pt;
+  int *N_fourier_wavenumber_pt;
 };
 
 ///////////////////////////////////////////////////////////////////////////
