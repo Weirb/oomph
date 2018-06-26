@@ -21,3 +21,8 @@ The program can then be run by typing ./main
 0. Remove the PML/fix the issues
 0. Add an exact solution for the problem
 0. Cleanup/comment the code
+
+Alt-list
+0. oscillating_sphere.cc
+0. Copy the pml_helmholtz_equation code and build in directory, don't create lib
+0. Copy across the Fourier decomposed stuff
