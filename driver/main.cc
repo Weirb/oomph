@@ -236,23 +236,6 @@ namespace GlobalParameters
  
  /// The tolerance for a point relative to the bounding inner square
  double Eps=1.0e-12;
-   
- /// \short Function to determine whether or not a point lies in the centre
- /// of the mesh (in the pinned region)
- bool is_in_pinned_region(const Vector<double>& x)
- {
-  // Check if the element lies in the central cube region
-  // return (abs(x[0]-GlobalParameters::Centre)<
-	 //  (0.5*GlobalParameters::Element_width+Eps)&&
-	 //  abs(x[1]-GlobalParameters::Centre)<
-	 //  (0.5*GlobalParameters::Element_width+Eps)&&
-	 //  abs(x[2]-GlobalParameters::Centre)<
-	 //  (0.5*GlobalParameters::Element_width+Eps));
-  return (abs(x[0]-GlobalParameters::Centre)<
-	  (0.5*GlobalParameters::Element_width+Eps)&&
-	  abs(x[1]-GlobalParameters::Centre)<
-	  (0.5*GlobalParameters::Element_width+Eps));
- } // End of is_in_pinned_region 
 } // End of namespace
 
 /////////////////////////////////////////////////////////////////////
@@ -592,37 +575,6 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::apply_boundary_conditions()
    // Get the (Eulerian) coordinates of the centre of the element
    el_pt->get_x(s,x);
 
-   // Check if the element lies in the central cube region
-   if (GlobalParameters::is_in_pinned_region(x))
-   {
-    // Calculate the number of nodes in the element
-    unsigned nnode=el_pt->nnode();
-
-    // Loop over all of the nodes in the element
-    for (unsigned i=0;i<nnode;i++)
-    {
-     // Create a node pointer to store the i-th node in the element
-     Node* node_pt=el_pt->node_pt(i);
-
-     // Get the spatial position of this node
-     for (unsigned k=0;k<2;k++)
-     {
-      // Store the k-th coordinate value in the vector, x
-      x[k]=node_pt->x(k);
-     }
-
-     // Get the exact solution at this (Eulerian) position
-     GlobalParameters::get_simple_exact_u(x,u);
-
-     // Make sure each dof at this point is pinned (real and imaginary)
-     node_pt->pin(0);
-     node_pt->pin(1);
-
-     // Set the solution value at this point
-     node_pt->set_value(0,u[0]);
-     node_pt->set_value(1,u[1]);
-    }
-   } // if(abs(x[0]-GlobalParameters::Centre) < 0.51 ... 
   } // if (el_pt!=0)
  } // for (unsigned e=0;e<n_element;e++)
         
@@ -891,15 +843,6 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::doc_solution()
    if(x[1]>=right_boundary) continue;
    // if(x[2]<=left_boundary) continue;
    // if(x[2]>=right_boundary) continue;
-
-   // If it's in the (pinned) central region, ignore it 
-
-   // Check if the element lies in the central cube region
-   if (GlobalParameters::is_in_pinned_region(x))
-   {
-    // Skip to the next element
-    continue;
-   }
 
    // Otherwise, compute the L2 norm of the error over this element
    el_pt->compute_error(some_file,
