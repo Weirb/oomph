@@ -115,7 +115,7 @@ namespace oomph
 
 
    // Get the Fourier wavenumber
-   double n = (double)this->pml_fourier_wavenumber();
+   double n = (double)this->n_fourier_wavenumber();
    double n_squared = n * n;
 
    // Declare a vector of complex numbers for pml weights on the Laplace bit

@@ -114,7 +114,7 @@ namespace GlobalParameters
  }
 
  /// Fourier wavenumber
- int N_fourier_wavenumber=0;
+ int N_fourier_wavenumber=10;
  
  /// The x and y coordinate of the centre of the cube 
  double Centre=Lx/2.0;
