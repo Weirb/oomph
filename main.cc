@@ -1,14 +1,3 @@
-/*
-
-2d solving of the same problem
-Need to change the coordinates and stuff
-Also need to change the equations
-- This means change the element
-
-*/
-
-
-
 //LIC//======================================================================
 ///LIC// This file forms part of oomph-lib,the object-oriented,
 //LIC// multi-physics finite-element library,available
