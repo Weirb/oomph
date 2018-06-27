@@ -189,7 +189,10 @@ namespace oomph
   }
 
   /// Get the Fourier wavenumber
-  int pml_fourier_wavenumber()
+  // Should this return a double or integer?
+  // The wavenumber is an integer but we will use in calculations where
+  // it will be implicitly converted to a double. Is this an issue?
+  int n_fourier_wavenumber()
   {
    if (N_fourier_wavenumber_pt == 0)
    {
@@ -663,11 +666,6 @@ namespace oomph
 
  protected:
 
-/// \short Compute pml coefficients at position x and integration point ipt.
-  /// pml_laplace_factor is used in the residual contribution from the laplace
-  /// operator, similarly pml_k_squared_factor is used in the contribution from
-  /// the k^2 of the Helmholtz operator.
-
   /// \short Compute complex variable r at position x[0] and
   /// integration point ipt
   void compute_complex_r(const unsigned &ipt,
@@ -706,6 +704,10 @@ namespace oomph
 
   } // end of compute_complex_r
 
+  /// \short Compute pml coefficients at position x and integration point ipt.
+  /// pml_laplace_factor is used in the residual contribution from the laplace
+  /// operator, similarly pml_k_squared_factor is used in the contribution from
+  /// the k^2 of the Helmholtz operator.
   void compute_pml_coefficients(
    const unsigned &ipt,
    const Vector<double> &x,
@@ -779,40 +781,6 @@ namespace oomph
     pml_k_squared_factor = std::complex<double>(1.0, 0.0);
    }
   }
-
-  /// \short Compute complex variable r at position x[0] and
-  /// integration point ipt
-  // void compute_complex_r(const unsigned &ipt,
-  //                        const Vector<double> &x,
-  //                        std::complex<double> &complex_r)
-  // {
-  //   // Cache current position r
-  //   double r = x[0];
-
-  //   /// The complex r variable is only imaginary on two
-  //   /// conditions: First, the decaying nature of the
-  //   /// pml layers is active.  Secondly, the
-  //   /// integration point is contained in the right pml
-  //   /// layer or the two corner pml layers.
-
-  //   // If the complex r variable is imaginary
-  //   if (this->Pml_is_enabled && (this->Pml_direction_active[0]))
-  //   {
-  //     double nu = x[0] - Pml_inner_boundary[0];
-  //     double pml_width = Pml_outer_boundary[0] - Pml_inner_boundary[0];
-  //     double k_squared_local = k_squared();
-
-  //     // Determine the complex r variable
-  //     complex_r = Pml_mapping_pt->transformed_coordinate(nu, pml_width, Pml_inner_boundary[0], k_squared_local);
-  //   }
-  //   else
-  //   {
-  //     // The complex r variable is infact purely real, and
-  //     // is equal to x[0]
-  //     complex_r = std::complex<double>(r, 0.0);
-  //   }
-
-  // } // end of compute_complex_r
 
   /// \short Shape/test functions and derivs w.r.t. to global coords at
   /// local coord. s; return  Jacobian of mapping
