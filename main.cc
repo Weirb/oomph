@@ -61,6 +61,45 @@ namespace GlobalParameters
  
  /// The minimum level of uniform refinement
  unsigned Min_refinement_level=1;
+
+ /// The additional levels of uniform refinement 
+ unsigned Add_refinement_level=0;
+ 
+ /// The number of adaptations allowed by the Newton solver
+ unsigned N_adaptations=1;
+
+ /// \short The choice of whether or not to use adaptation
+ ///    0 = Uniform refinement
+ ///    1 = Adaptive refinement
+ unsigned Use_adaptation_flag=0;
+
+ /// \short The choice of pre-smoother:
+ ///    0 = Automatic (GMRES as a smoother on levels where kh>0.5)
+ ///    1 = Damped Jacobi on all levels with a constant omega value
+ unsigned Pre_smoother_flag=0;
+ 
+ /// \short The choice of post-smoother:
+ ///    0 = Automatic (GMRES as a smoother on levels where kh>0.5)
+ ///    1 = Damped Jacobi on all levels with a constant omega value
+ unsigned Post_smoother_flag=0;
+
+ /// \short The choice of linear solver
+ ///    0 = SuperLU
+ ///    1 = Multigrid
+ unsigned Linear_solver_flag=1;
+
+  /// \short The MG solver allows for five different levels of output:
+ ///    0 = Outputs everything
+ ///    1 = Outputs everything except the smoother timings 
+ ///    2 = Outputs setup information but no V-cycle timings
+ ///    3 = Suppresses all output
+ unsigned Output_management_flag=0;
+  
+ /// \short Variable used to decide whether or not convergence information
+ /// is displayed:
+ ///    0 = Don't display convergence information
+ ///    1 = Display convergence information
+ unsigned Doc_convergence_flag=0;
  
  /// DocInfo object used for documentation of the solution
  DocInfo Doc_info;
@@ -88,6 +127,10 @@ namespace GlobalParameters
  
  /// Store the value of Pi
  double Pi=MathematicalConstants::Pi;
+
+ /// Choose the value of the shift to create the complex-shifted
+ /// Laplacian preconditioner (CSLP)
+ double Alpha_shift=0.0;
  
  /// Square of the wavenumber (also known as k^2)
  double K_squared=20.0;
@@ -234,7 +277,7 @@ namespace Smoother_Factory_Function_Helper
 /// Problem class
 //========================================================================
 template<class ELEMENT>
-class PMLFourierDecomposedHelmholtzProblem : public Problem
+class PMLFourierDecomposedHelmholtzProblem : public HelmholtzMGProblem
 {
 
 public:
@@ -276,7 +319,22 @@ public:
 private:
 
  /// Pointer to the "bulk" mesh
- RectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
+ RefineableRectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
+
+ /// Overload the make_new_problem function to return an object of this class
+ HelmholtzMGProblem* make_new_problem()
+ {
+  // Return a new problem pointer
+  return new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
+ }
+
+ /// \short Overload the mg_bulk_mesh_pt function to return a pointer to the
+ /// "refineable" portion of the mesh
+ TreeBasedRefineableMeshBase* mg_bulk_mesh_pt()
+ {
+  // Return the pointer to the bulk mesh
+  return Bulk_mesh_pt;
+ }
  
  /// Trace file
  ofstream Trace_file;
@@ -294,6 +352,15 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
 
  // Set the number of Newton iterations to one
  max_newton_iterations()=10;
+
+ // Set up solver specific information:
+ //------------------------------------
+ // If we're choosing to use GMRES & MG as our linear solver
+ if (GlobalParameters::Linear_solver_flag==1)
+ {
+  // Set the solver
+  set_gmres_multigrid_solver();
+ }
  
  // Open trace file
  Trace_file.open("RESLT/trace.dat");
@@ -301,7 +368,7 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
  // Build the mesh using the specified parameters:
  //-----------------------------------------------
  // Build the "bulk" mesh
- Bulk_mesh_pt=new RectangularQuadMesh<ELEMENT>(
+ Bulk_mesh_pt=new RefineableRectangularQuadMesh<ELEMENT>(
   GlobalParameters::Nx,GlobalParameters::Ny,
   GlobalParameters::Lx,GlobalParameters::Ly);
 
@@ -357,6 +424,30 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
 template<class ELEMENT>
 PMLFourierDecomposedHelmholtzProblem<ELEMENT>::~PMLFourierDecomposedHelmholtzProblem()
 {   
+
+ // If we're using GMRES & MG as the linear solver
+ if (GlobalParameters::Linear_solver_flag==1)
+ {
+  // Delete the MG solver pointers
+  delete dynamic_cast<HelmholtzFGMRESMG<CRDoubleMatrix>* >
+   (linear_solver_pt())->preconditioner_pt();
+
+  // Set the pointer to null
+  dynamic_cast<HelmholtzFGMRESMG<CRDoubleMatrix>* >
+   (linear_solver_pt())->preconditioner_pt()=0;
+    
+  // Delete the MG solver pointers
+  delete linear_solver_pt();
+
+  // Set the pointer to null
+  linear_solver_pt()=0;    
+ }
+   
+ // Delete the error estimator
+ delete Bulk_mesh_pt->spatial_error_estimator_pt();
+ 
+ // Set the pointer to null
+ Bulk_mesh_pt->spatial_error_estimator_pt()=0;
  // Delete the "bulk" mesh
  delete Bulk_mesh_pt;
 
@@ -458,6 +549,73 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::apply_boundary_conditions()
   }
  } // for(unsigned b=0;b<n_bound;b++)
 } // End of apply_boundary_conditions
+
+//=======set_gmres_multigrid_solver=======================================
+/// Build and set GMRES preconditioner by multigrid as the linear solver
+//========================================================================
+template<class ELEMENT>
+void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::set_gmres_multigrid_solver()
+{
+ // Create linear solver
+ HelmholtzFGMRESMG<CRDoubleMatrix>* solver_pt=
+  new HelmholtzFGMRESMG<CRDoubleMatrix>;
+
+ // Set the number of iterations
+ solver_pt->max_iter()=200;
+
+ // Set the tolerance (to ensure the Newton solver converges in one step)
+ solver_pt->tolerance()=1.0e-10;
+   
+ // If the user wishes to document the convergence information
+ if (GlobalParameters::Doc_convergence_flag)
+ {
+  // Create a file to record the convergence history
+  solver_pt->open_convergence_history_file_stream("RESLT/conv.dat");
+ }
+ 
+ // Create linear solver 
+ linear_solver_pt()=solver_pt;
+ 
+ // This preconditioner uses multigrid on the block version of the full
+ // matrix. 2 V-cycles will be used here per preconditioning step
+ HelmholtzMGPreconditioner<2>* prec_pt=new HelmholtzMGPreconditioner<2>(this);
+
+ // Set preconditioner
+ solver_pt->preconditioner_pt()=prec_pt;
+  
+ // Set the shift
+ prec_pt->alpha_shift()=GlobalParameters::Alpha_shift;
+   
+ // If the user wants to use damped Jacobi on every level as a smoother
+ if (GlobalParameters::Pre_smoother_flag==1)
+ {
+  // Set the pre-smoother factory function
+  prec_pt->set_pre_smoother_factory_function
+   (Smoother_Factory_Function_Helper::set_pre_smoother);
+ }
+
+ // If the user wants to use damped Jacobi on every level as a smoother
+ if (GlobalParameters::Post_smoother_flag==1)
+ {
+  // Set the post-smoother factory function
+  prec_pt->set_post_smoother_factory_function
+   (Smoother_Factory_Function_Helper::set_post_smoother);
+ }
+ 
+ // Suppress certain timings
+ if (GlobalParameters::Output_management_flag==1)
+ {
+  prec_pt->disable_doc_time();
+ }
+ else if (GlobalParameters::Output_management_flag==2)
+ {
+  prec_pt->disable_v_cycle_output();
+ }
+ else if (GlobalParameters::Output_management_flag==3)
+ {
+  prec_pt->disable_output();
+ }
+} // End of set_gmres_multigrid_solver
 
 //==============================================start_of_enable_pmls======
 /// Enable the PML mapping function for each node in the PML region
@@ -773,28 +931,154 @@ int main(int argc,char **argv)
  Problem* problem_pt=0;
 
  // Typedef element name
- typedef QPMLHelmholtzElement<2,2> ELEMENT;
+//  typedef QPMLHelmholtzElement<2,2> ELEMENT;
+ typedef RefineableQPMLHelmholtzElement<2,2> ELEMENT;
  
  // Set the problem pointer
  problem_pt=new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
 
- //------------------ 
- // Solve the problem
- //------------------ 
- // Keep refining until the minimum refinement level is reached
- for (unsigned i=0;i<GlobalParameters::Min_refinement_level;i++)
- { 
-  oomph_info << "\n===================="
-	     << "Initial Refinement"
-	     << "====================\n"
-	     << std::endl;
 
-  // Add additional refinement
-  problem_pt->refine_uniformly();
- }
-  
+//------------------ 
  // Solve the problem
- problem_pt->newton_solve();
+ //------------------ 
+ // If the user wishes to use adaptive refinement then we use the Newton
+ // solver with a given argument to indicate how many adaptations to use
+ if (GlobalParameters::Use_adaptation_flag)
+ {
+  // If the user wishes to silence everything
+  if (GlobalParameters::Output_management_flag==3)
+  {
+   // Store the output stream pointer
+   GlobalParameters::Stream_pt=oomph_info.stream_pt();
+
+   // Now set the oomph_info stream pointer to the null stream to
+   // disable all possible output
+   oomph_info.stream_pt()=&oomph_nullstream;
+  }
+    
+  // Keep refining until the minimum refinement level is reached
+  for (unsigned i=0;i<GlobalParameters::Min_refinement_level;i++)
+  { 
+   oomph_info << "\n===================="
+	      << "Initial Refinement"
+	      << "====================\n"
+	      << std::endl;
+
+   // Add additional refinement
+   problem_pt->refine_uniformly();
+  }
+
+  // If we silenced the adaptation, allow output again
+  if (GlobalParameters::Output_management_flag==3)
+  {
+   // Now set the oomph_info stream pointer to the null stream to
+   // disable all possible output
+   oomph_info.stream_pt()=GlobalParameters::Stream_pt;
+  }
+  
+  // Solve the problem
+  problem_pt->newton_solve();
+   
+  // Keep refining until the minimum refinement level is reached
+  for (unsigned i=0;i<GlobalParameters::N_adaptations;i++)
+  { 
+   // If the user wishes to silence everything
+   if (GlobalParameters::Output_management_flag==3)
+   {
+    // Store the output stream pointer
+    GlobalParameters::Stream_pt=oomph_info.stream_pt();
+
+    // Now set the oomph_info stream pointer to the null stream to
+    // disable all possible output
+    oomph_info.stream_pt()=&oomph_nullstream;
+   }
+   
+   // Adapt the problem
+   problem_pt->adapt();
+   
+   // If we silenced the adaptation, allow output again
+   if (GlobalParameters::Output_management_flag==3)
+   {
+    // Now set the oomph_info stream pointer to the null stream to
+    // disable all possible output
+    oomph_info.stream_pt()=GlobalParameters::Stream_pt;
+   }
+  
+   // Solve the problem
+   problem_pt->newton_solve();
+  }
+ }
+ // If the user instead wishes to use uniform refinement
+ else
+ {
+  // If the user wishes to silence everything
+  if (GlobalParameters::Output_management_flag==3)
+  {
+   // Store the output stream pointer
+   GlobalParameters::Stream_pt=oomph_info.stream_pt();
+
+   // Now set the oomph_info stream pointer to the null stream to
+   // disable all possible output
+   oomph_info.stream_pt()=&oomph_nullstream;
+  }
+  
+  // Keep refining until the minimum refinement level is reached
+  for (unsigned i=0;i<GlobalParameters::Min_refinement_level;i++)
+  { 
+   oomph_info << "\n===================="
+	      << "Initial Refinement"
+	      << "====================\n"
+	      << std::endl;
+
+   // Add additional refinement
+   problem_pt->refine_uniformly();
+  }
+ 
+  // If we silenced the adaptation, allow output again
+  if (GlobalParameters::Output_management_flag==3)
+  {
+   // Now set the oomph_info stream pointer to the null stream to
+   // disable all possible output
+   oomph_info.stream_pt()=GlobalParameters::Stream_pt;
+  }
+  
+  // Solve the problem
+  problem_pt->newton_solve();
+ 
+  // Refine and solve until the additional refinements have been completed
+  for (unsigned i=0;i<GlobalParameters::Add_refinement_level;i++)
+  {
+   // If the user wishes to silence everything
+   if (GlobalParameters::Output_management_flag==3)
+   {
+    // Store the output stream pointer
+    GlobalParameters::Stream_pt=oomph_info.stream_pt();
+
+    // Now set the oomph_info stream pointer to the null stream to
+    // disable all possible output
+    oomph_info.stream_pt()=&oomph_nullstream;
+   }
+  
+   oomph_info << "==================="
+	      << "Additional Refinement"
+	      << "==================\n"
+	      << std::endl;
+ 
+   // Add additional refinement
+   problem_pt->refine_uniformly();
+  
+   // If we silenced the adaptation, allow output again
+   if (GlobalParameters::Output_management_flag==3)
+   {
+    // Now set the oomph_info stream pointer to the null stream to
+    // disable all possible output
+    oomph_info.stream_pt()=GlobalParameters::Stream_pt;
+   }
+  
+   // Solve the problem
+   problem_pt->newton_solve();
+  }
+ } // if (GlobalParameters::Use_adaptation_flag)
  
  // Delete the problem pointer
  delete problem_pt;
