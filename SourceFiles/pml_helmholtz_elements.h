@@ -56,6 +56,133 @@
 namespace oomph
 {
 
+ namespace Legendre_functions_helper
+ {
+
+  //========================================================================
+  // Factorial
+  //========================================================================
+   double factorial(const unsigned& l)
+   {
+    if(l==0) return 1.0;
+    return double(l*factorial(l-1));
+   }
+
+
+  //========================================================================
+  /// Legendre polynomials depending on one parameter
+  //========================================================================
+   double plgndr1(const unsigned& n, const double& x)
+   {
+    unsigned i;
+    double pmm,pmm1;
+    double pmm2=0;
+
+  #ifdef PARANOID
+    // Shout if things went wrong
+    if (std::fabs(x) > 1.0)
+     {
+      std::ostringstream error_stream;
+      error_stream << "Bad arguments in routine plgndr1: x=" << x
+                   << " but should be less than 1 in absolute value.\n";
+      throw OomphLibError(error_stream.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+     }
+  #endif
+
+    // Compute pmm : if l=m it's finished
+    pmm=1.0;
+    if (n == 0)
+     {
+      return pmm;
+     }
+
+    pmm1=x*1.0;
+    if (n == 1)
+     {
+      return pmm1;
+     }
+    else
+     {
+      for (i=2;i<=n;i++)
+       {
+        pmm2=(x*(2*i-1)*pmm1-(i-1)*pmm)/i;
+        pmm=pmm1;
+        pmm1=pmm2;
+       }
+      return pmm2;
+     }
+
+   }//end of plgndr1
+
+
+
+  //========================================================================
+  //========================================================================
+   double plgndr2(const unsigned& l, const unsigned& m, const double& x)
+   {
+    unsigned i,ll;
+    double fact,pmm,pmmp1,somx2;
+    double pll=0.0;
+
+  #ifdef PARANOID
+    // Shout if things went wrong
+    if (std::fabs(x) > 1.0)
+     {
+      std::ostringstream error_stream;
+      error_stream << "Bad arguments in routine plgndr2: x=" << x
+                   << " but should be less than 1 in absolute value.\n";
+      throw OomphLibError(error_stream.str(),
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
+     }
+  #endif
+
+    // This one is easy...
+    if (m > l)
+     {
+      return 0.0;
+     }
+
+    // Compute pmm : if l=m it's finished
+    pmm=1.0;
+    if (m > 0)
+     {
+      somx2=sqrt((1.0-x)*(1.0+x));
+      fact=1.0;
+      for (i=1;i<=m;i++)
+       {
+        pmm *= -fact*somx2;
+        fact += 2.0;
+       }
+     }
+    if (l == m) return pmm;
+
+    // Compute pmmp1 : if l=m+1 it's finished
+    else
+     {
+      pmmp1=x*(2*m+1)*pmm;
+      if (l == (m+1))
+       {
+        return pmmp1;
+       }
+      // Compute pll : if l>m+1 it's finished
+      else
+       {
+        for (ll=m+2;ll<=l;ll++)
+         {
+          pll=(x*(2*ll-1)*pmmp1-(ll+m-1)*pmm)/(ll-m);
+          pmm=pmmp1;
+          pmmp1=pll;
+         }
+        return pll;
+       }
+     }
+   }//end of plgndr2
+
+ } // end namespace
+
  //=======================================================================
  /// Class to hold the mapping function for the PML
  ///
