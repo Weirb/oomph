@@ -35,12 +35,14 @@
 // Generic routines
 #include "generic.h"
 
+#include "oomph_crbond_bessel.h"
+
 // The Helmholtz equations and complex-valued multigrid machinery
 #include "SourceFiles/pml_helmholtz.h"
 
 // The mesh
-#include "meshes/simple_cubic_mesh.h"
-#include "meshes/simple_rectangular_quadmesh.h"
+#include "meshes.h"
+
 
 using namespace std;
 using namespace oomph;
@@ -86,7 +88,7 @@ namespace GlobalParameters
  /// \short The choice of linear solver
  ///    0 = SuperLU
  ///    1 = Multigrid
- unsigned Linear_solver_flag=1;
+ unsigned Linear_solver_flag=0;
 
   /// \short The MG solver allows for five different levels of output:
  ///    0 = Outputs everything
@@ -119,12 +121,6 @@ namespace GlobalParameters
  unsigned Ny=27;
  // unsigned Nz=7;
  
- /// The element width
- double Element_width=Lx/double(Nx);
- 
- /// Length of cube in each direction
- double Pml_thickness=Element_width;
- 
  /// Store the value of Pi
  double Pi=MathematicalConstants::Pi;
 
@@ -133,7 +129,7 @@ namespace GlobalParameters
  double Alpha_shift=0.0;
  
  /// Square of the wavenumber (also known as k^2)
- double K_squared=20.0;
+ double K_squared=4.0;
 
  /// Wavenumber (also known as k),k=omega/c
  double Wavenumber=sqrt(K_squared);
@@ -146,98 +142,18 @@ namespace GlobalParameters
  }
 
  /// Fourier wavenumber
- int N_fourier_wavenumber=10;
- 
- /// The x and y coordinate of the centre of the cube 
- double Centre=Lx/2.0;
+ int N_fourier_wavenumber=5;
 
- /// Get the exact solution, u, at the spatial position, x
- void get_simple_exact_u(const Vector<double>& x,Vector<double>& u)
+ /// Exact solution as a Vector of size 2, containing real and imag parts
+ void get_exact_u(const Vector<double>& x, Vector<double>& u)
  {
-  // Initialise a variable to store the radial distance
-  double r=std::sqrt((x[0]-Centre)*(x[0]-Centre)
-		     +(x[1]-Centre)*(x[1]-Centre));
-
-  // Scale the radial distance by the wavenumber
-  double kr=Wavenumber*r;
-
-  // The solution is singular at the centre so set it to zero 
-  if (r==0.0)
-  {
-   // Set the real part of the solution value
-   u[0]=0.0;
-   
-   // Set the imaginary part of the solution value
-   u[1]=0.0;
-  }
-  // Otherwise set the correct solution value
-  else
-  {
-   // Set the real part of the solution value
-   u[0]=cos(kr)/kr;
-   
-   // Set the imaginary part of the solution value
-   u[1]=sin(kr)/kr;
-  }
- } // End of get_simple_exact_u
-
- // Set the exact solution pointer to the get_simple_exact_u function above
- FiniteElement::SteadyExactSolutionFctPt simple_exact_u_pt=&get_simple_exact_u;
-
- /// \short New mapping function that makes the mapping independent of the
- /// PML thickness
- class TestPMLMapping : public virtual PMLMapping
- {
- public:
-
-  /// Default constructor (empty)
-  TestPMLMapping(){};
-
-  /// \short Overwrite the pure PML mapping coefficient function to return the
-  /// coeffcients proposed by Bermudez et al
-  std::complex<double> gamma(const double& nu_i,
-			     const double& pml_width_i,
-			     const double& k_squared_local,
-			     const double& alpha_shift)
-   {
-    // The "effective k^2" is shifted, so we shift the k used in the
-    // transformation too
-    std::complex<double> k_shifted=
-     sqrt(k_squared_local*std::complex<double>(1.0,alpha_shift));
-
-    // Return the gamma in J++, with the shifted k
-    return (1.0/k_shifted)*std::complex<double>
-     (0.0,1.0/(std::fabs(pml_width_i-nu_i)));    
-   } // End of gamma
- }; // End of TestPMLMapping
-
- /// Set the new PML mapping
- TestPMLMapping* Test_pml_mapping_pt=new TestPMLMapping;
+  // TODO
+  u[0] = 1;
+  u[1] = 0;
+ }
  
- /// \short The choice of whether or not to enable the new test mapping
- ///    1 = Enable test mapping
- ///    0 = Disable test mapping
- unsigned Enable_test_pml_mapping_flag=1;
- 
- /// The tolerance for a point relative to the bounding inner square
- double Eps=1.0e-12;
-   
- /// \short Function to determine whether or not a point lies in the centre
- /// of the mesh (in the pinned region)
- bool is_in_pinned_region(const Vector<double>& x)
- {
-  // Check if the element lies in the central cube region
-  // return (abs(x[0]-GlobalParameters::Centre)<
-	 //  (0.5*GlobalParameters::Element_width+Eps)&&
-	 //  abs(x[1]-GlobalParameters::Centre)<
-	 //  (0.5*GlobalParameters::Element_width+Eps)&&
-	 //  abs(x[2]-GlobalParameters::Centre)<
-	 //  (0.5*GlobalParameters::Element_width+Eps));
-  return (abs(x[0]-GlobalParameters::Centre)<
-	  (0.5*GlobalParameters::Element_width+Eps)&&
-	  abs(x[1]-GlobalParameters::Centre)<
-	  (0.5*GlobalParameters::Element_width+Eps));
- } // End of is_in_pinned_region 
+ FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
+
 } // End of namespace
 
 /////////////////////////////////////////////////////////////////////
@@ -319,7 +235,8 @@ public:
 private:
 
  /// Pointer to the "bulk" mesh
- RefineableRectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
+ // RefineableRectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
+ RectangularQuadMesh<ELEMENT>* Bulk_mesh_pt;
 
  /// Overload the make_new_problem function to return an object of this class
  HelmholtzMGProblem* make_new_problem()
@@ -333,7 +250,8 @@ private:
  TreeBasedRefineableMeshBase* mg_bulk_mesh_pt()
  {
   // Return the pointer to the bulk mesh
-  return Bulk_mesh_pt;
+  // return Bulk_mesh_pt;
+  return nullptr;
  }
  
  /// Trace file
@@ -368,7 +286,7 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
  // Build the mesh using the specified parameters:
  //-----------------------------------------------
  // Build the "bulk" mesh
- Bulk_mesh_pt=new RefineableRectangularQuadMesh<ELEMENT>(
+ Bulk_mesh_pt=new RectangularQuadMesh<ELEMENT>(
   GlobalParameters::Nx,GlobalParameters::Ny,
   GlobalParameters::Lx,GlobalParameters::Ly);
 
@@ -398,21 +316,12 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
    // Set the Fourier wavenumber
    el_pt->n_fourier_wavenumber_pt()=&GlobalParameters::N_fourier_wavenumber;
    
-   // If we're using Jonathon's new test mapping
-   if (GlobalParameters::Enable_test_pml_mapping_flag)
-   {
-    // Set the PML mapping function
-    el_pt->pml_mapping_pt()=GlobalParameters::Test_pml_mapping_pt;
-   }
   } // if (el_pt!=0)
  } // for (unsigned e=0;e<n_element;e++)
 
  // Apply the boundary conditions, both in the central region and on the
  // outer boundary (since these nodes are PML nodes)
  apply_boundary_conditions();
- 
- // Enable the PML mapping in elements in the PML region
- enable_pmls();
  
  // Setup equation numbering scheme
  assign_eqn_numbers(); 
@@ -444,10 +353,10 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::~PMLFourierDecomposedHelmholtzPro
  }
    
  // Delete the error estimator
- delete Bulk_mesh_pt->spatial_error_estimator_pt();
+ // delete Bulk_mesh_pt->spatial_error_estimator_pt();
  
  // Set the pointer to null
- Bulk_mesh_pt->spatial_error_estimator_pt()=0;
+ // Bulk_mesh_pt->spatial_error_estimator_pt()=0;
  // Delete the "bulk" mesh
  delete Bulk_mesh_pt;
 
@@ -474,52 +383,6 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::apply_boundary_conditions()
  // Vector to hold the real and imaginary part of the solution
  Vector<double> u(2,0.0);
     
- // Loop over the elements in the mesh
- for (unsigned e=0;e<n_element;e++)
- {
-  // Upcast from GeneralisedElement to Helmholtz bulk element
-  ELEMENT* el_pt=dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
-
-  // If the upcast was successful
-  if (el_pt!=0)
-  {
-   // Get the (Eulerian) coordinates of the centre of the element
-   el_pt->get_x(s,x);
-
-   // Check if the element lies in the central cube region
-   if (GlobalParameters::is_in_pinned_region(x))
-   {
-    // Calculate the number of nodes in the element
-    unsigned nnode=el_pt->nnode();
-
-    // Loop over all of the nodes in the element
-    for (unsigned i=0;i<nnode;i++)
-    {
-     // Create a node pointer to store the i-th node in the element
-     Node* node_pt=el_pt->node_pt(i);
-
-     // Get the spatial position of this node
-     for (unsigned k=0;k<2;k++)
-     {
-      // Store the k-th coordinate value in the vector, x
-      x[k]=node_pt->x(k);
-     }
-
-     // Get the exact solution at this (Eulerian) position
-     GlobalParameters::get_simple_exact_u(x,u);
-
-     // Make sure each dof at this point is pinned (real and imaginary)
-     node_pt->pin(0);
-     node_pt->pin(1);
-
-     // Set the solution value at this point
-     node_pt->set_value(0,u[0]);
-     node_pt->set_value(1,u[1]);
-    }
-   } // if(abs(x[0]-GlobalParameters::Centre) < 0.51 ... 
-  } // if (el_pt!=0)
- } // for (unsigned e=0;e<n_element;e++)
-          
  // Find the number of boundaries in the mesh
  unsigned n_bound=Bulk_mesh_pt->nboundary();
  
@@ -541,11 +404,13 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::apply_boundary_conditions()
    // Pin the (imaginary) dof at this node
    boundary_node_pt->pin(1);
 
+   GlobalParameters::get_exact_u(x, u);
+
    // Set the solution value at this point (real part)
-   boundary_node_pt->set_value(0,0.0);
+   boundary_node_pt->set_value(0,u[0]);
    
    // Set the solution value at this point (imaginary part)
-   boundary_node_pt->set_value(1,0.0);
+   boundary_node_pt->set_value(1,u[1]);
   }
  } // for(unsigned b=0;b<n_bound;b++)
 } // End of apply_boundary_conditions
@@ -617,73 +482,6 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::set_gmres_multigrid_solver()
  }
 } // End of set_gmres_multigrid_solver
 
-//==============================================start_of_enable_pmls======
-/// Enable the PML mapping function for each node in the PML region
-//========================================================================
-template<class ELEMENT>
-void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::enable_pmls()
-{
- // Find the number of elements in the mesh
- unsigned n_element=Bulk_mesh_pt->nelement();
-
- // Vector to hold the local coordinates of a point in any given element 
- Vector<double> s(2,0.0);
- 
- // Vector to hold the (Eulerian) coordinates of a point
- Vector<double> x(2,0.0);
-
- // Vector to hold the real and imaginary part of the solution
- Vector<double> u(2,0.0);
-
- // Store the required coordinate of the inner boundary of the left PML; 
- // in any given direction this will be the value of Pml_thickness
- double left_boundary=GlobalParameters::Pml_thickness;
-   
- // Store the required coordinate of the inner boundary of the right
- // PML; in the x-direction this will be the value of Lx-Pml_thickness
- // (or Ly-Pml_thickness in the y-direction and Lz-Pml_thickness in
- // the z-direction) but we assume the PML has the same thickness in
- // all directions
- double right_boundary=GlobalParameters::Lx-GlobalParameters::Pml_thickness;
-
- // Loop over the elements in the mesh
- for (unsigned e=0;e<n_element;e++)
- {
-  // Upcast from GeneralisedElement to Helmholtz bulk element
-  ELEMENT* el_pt=dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
-
-  // If the upcast was successful
-  if (el_pt!=0)
-  {
-   // If we're using Jonathon's new test mapping
-   if (GlobalParameters::Enable_test_pml_mapping_flag)
-   {
-    // Set the PML mapping function
-    el_pt->pml_mapping_pt()=GlobalParameters::Test_pml_mapping_pt;
-   }
-  
-   // Get the (Eulerian) coordinates of the centre of the element
-   el_pt->get_x(s,x);
-   
-   // If it's in the left (x-direction) PML region
-   if (x[0]<=left_boundary)
-    el_pt->enable_pml(0,left_boundary,0.0);
-
-   // If it's in the right (x-direction) PML region
-   if (x[0]>=right_boundary)
-    el_pt->enable_pml(0,right_boundary,GlobalParameters::Lx);
-
-   // If it's in the left (y-direction) PML region
-   if (x[1]<=left_boundary)
-    el_pt->enable_pml(1,left_boundary,0.0);
-
-   // If it's in the right (y-direction) PML region
-   if (x[1]>=right_boundary)
-    el_pt->enable_pml(1,right_boundary,GlobalParameters::Ly);
-  }
- } // for (unsigned e=0;e<n_element;e++)
-} // End of enable_pmls
-
 //======================================start_of_actions_after_adapt======
 /// Actions after adapt: Re-apply the boundary conditions
 //========================================================================
@@ -714,9 +512,6 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::actions_after_adapt()
  
  // Re-apply boundary conditions
  apply_boundary_conditions();
-
- // Re-enable the PML mapping in elements in the PML region
- enable_pmls();
 
  // Rebuild the mesh
  rebuild_global_mesh();
@@ -759,7 +554,7 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::doc_solution()
 	 GlobalParameters::Doc_info.directory().c_str(),
 	 GlobalParameters::Doc_info.number());
  some_file.open(filename);
- Bulk_mesh_pt->output_fct(some_file,npts,GlobalParameters::simple_exact_u_pt);
+ Bulk_mesh_pt->output_fct(some_file,npts,GlobalParameters::exact_u_pt);
  some_file.close();
 
  // Output coarse solution
@@ -790,75 +585,9 @@ void PMLFourierDecomposedHelmholtzProblem<ELEMENT>::doc_solution()
  // Variable to hold the L2 norm of the solution
  double norm=0.0;
  
- // Vector to hold the local coordinates of a point in an element
- Vector<double> s(2,0.0);
-
- // Vector to hold the spatial position of a point in an element
- Vector<double> x(2,0.0);
-
- // Store the required coordinate of the inner boundary of the left PML; 
- // in any given direction this will be the value of Pml_thickness
- double left_boundary=GlobalParameters::Pml_thickness;
-   
- // Store the required coordinate of the inner boundary of the right
- // PML; in the x-direction this will be the value of Lx-Pml_thickness
- // (or Ly-Pml_thickness in the y-direction and Lz-Pml_thickness in
- // the z-direction) but we assume the PML has the same thickness in
- // all directions
- double right_boundary=GlobalParameters::Lx-GlobalParameters::Pml_thickness;
-
- // Find out how many elements there are in the mesh
- unsigned n_element=Bulk_mesh_pt->nelement();
-
- // Loop over all of the elements in the mesh
- for (unsigned e=0;e<n_element;e++)
- { 
-  // Variables to hold the L2 norm of the error in the elemental solution
-  double el_error=0.0;
- 
-  // Variable to hold the L2 norm of the elemental solution
-  double el_norm=0.0;
- 
-  // Upcast from GeneralisedElement to Helmholtz bulk element
-  ELEMENT* el_pt=dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
-
-  // If the upcast was successful
-  if (el_pt!=0)
-  {
-   // Get the (Eulerian) coordinates of the centre of the element
-   el_pt->get_x(s,x);
-
-   // We only take the contribution from this element if it does
-   // not lie in the PML region 
-   if(x[0]<=left_boundary) continue;
-   if(x[0]>=right_boundary) continue;
-   if(x[1]<=left_boundary) continue;
-   if(x[1]>=right_boundary) continue;
-   // if(x[2]<=left_boundary) continue;
-   // if(x[2]>=right_boundary) continue;
-
-   // If it's in the (pinned) central region, ignore it 
-
-   // Check if the element lies in the central cube region
-   if (GlobalParameters::is_in_pinned_region(x))
-   {
-    // Skip to the next element
-    continue;
-   }
-
-   // Otherwise, compute the L2 norm of the error over this element
-   el_pt->compute_error(some_file,
-			GlobalParameters::get_simple_exact_u,
-			el_error,
-			el_norm);
-
-   // Update the global error norm value
-   error+=el_error;
-   
-   // Update the global norm value
-   norm+=el_norm;
-  }
- } // for(unsigned e=0;e<n_element;e++)
+ Bulk_mesh_pt->compute_error(some_file,
+   GlobalParameters::get_exact_u,
+   error, norm);
 
  // Now close the file
  some_file.close();
@@ -905,10 +634,6 @@ int main(int argc,char **argv)
  CommandLineArgs::specify_command_line_flag(
   "--k_sq",&GlobalParameters::K_squared);
  
- // Decide whether or not to display convergence information
- CommandLineArgs::specify_command_line_flag(
-  "--test_pml_mapping",&GlobalParameters::Enable_test_pml_mapping_flag);
- 
  // Parse command line
  CommandLineArgs::parse_and_assign();
   
@@ -932,12 +657,14 @@ int main(int argc,char **argv)
 
  // Typedef element name
 //  typedef QPMLHelmholtzElement<2,2> ELEMENT;
- typedef RefineableQPMLHelmholtzElement<2,2> ELEMENT;
+ typedef QPMLHelmholtzElement<2,2> ELEMENT;
  
  // Set the problem pointer
  problem_pt=new PMLFourierDecomposedHelmholtzProblem<ELEMENT>;
 
+ problem_pt->newton_solve();
 
+return 0;
 //------------------ 
  // Solve the problem
  //------------------ 
