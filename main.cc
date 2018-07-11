@@ -129,7 +129,7 @@ namespace GlobalParameters
  double Alpha_shift=0.0;
  
  /// Square of the wavenumber (also known as k^2)
- double K_squared=4.0;
+ double K_squared=25.0;
 
  /// Wavenumber (also known as k),k=omega/c
  double Wavenumber=sqrt(K_squared);
@@ -142,14 +142,35 @@ namespace GlobalParameters
  }
 
  /// Fourier wavenumber
- int N_fourier_wavenumber=5;
+ // If N=0, then we are solving the standard Helmholtz problem
+ int N_fourier_wavenumber=0;
 
  /// Exact solution as a Vector of size 2, containing real and imag parts
  void get_exact_u(const Vector<double>& x, Vector<double>& u)
  {
-  // TODO
-  u[0] = 1;
-  u[1] = 0;
+   // Convert to cylindrical coordinates
+  //  double r = sqrt(x[0]*x[0] + x[1]*x[1]);
+   double r = x[0];
+
+   // Argument for Bessel function, scale radial distance by wavenumber
+   double kr = Wavenumber*r;
+
+   Vector<double> jv(1);
+   Vector<double> djv(1);
+   Vector<double> yv(1);
+   Vector<double> dyv(1);
+
+   CRBond_Bessel::bessjyv(Wavenumber, 
+                          kr,
+                          Wavenumber,
+                          &jv[0],&yv[0],
+                          &djv[0],&dyv[0]);
+
+  complex<double> u_ex(0.0, 0.0);
+  u_ex+= jv[0];
+  
+  u[0]=u_ex.real();
+  u[1]=u_ex.imag();
  }
  
  FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
