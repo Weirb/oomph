@@ -58,6 +58,195 @@ void PMLHelmholtzEquations<DIM>::
                                                     DenseMatrix<double> &jacobian,
                                                     const unsigned &flag)
 {
+
+  //Find out how many nodes there are
+  const unsigned n_node = nnode();
+  
+  //Set up memory for the shape and test functions
+  Shape psi(n_node), test(n_node);
+  DShape dpsidx(n_node,2), dtestdx(n_node,2);
+  
+  //Set the value of n_intpt
+  const unsigned n_intpt = integral_pt()->nweight();
+  
+  //Integers to store the local equation and unknown numbers
+  int local_eqn_real=0, local_unknown_real=0;
+  int local_eqn_imag=0, local_unknown_imag=0;
+  
+  //Loop over the integration points
+  for(unsigned ipt=0;ipt<n_intpt;ipt++)
+   {
+    //Get the integral weight
+    double w = integral_pt()->weight(ipt);
+    
+    //Call the derivatives of the shape and test functions
+    double J = dshape_and_dtest_eulerian_at_knot_helmholtz
+     (ipt,psi,dpsidx,test,dtestdx);
+    
+    //Premultiply the weights and the Jacobian
+    double W = w*J;
+    
+    //Calculate local values of unknown
+    //Allocate and initialise to zero
+    std::complex<double> interpolated_u(0.0,0.0);
+    Vector<double> interpolated_x(2,0.0);
+    Vector< std::complex<double> > interpolated_dudx(2);
+    
+    //Calculate function value and derivatives:
+    //-----------------------------------------
+    // Loop over nodes
+    for(unsigned l=0;l<n_node;l++) 
+     {
+      // Loop over directions
+      for(unsigned j=0;j<2;j++)
+       {
+        interpolated_x[j] += raw_nodal_position(l,j)*psi(l);
+       }
+      
+      //Get the nodal value of the helmholtz unknown
+      const std::complex<double> u_value(
+       raw_nodal_value(l,u_index_helmholtz().real()),
+       raw_nodal_value(l,u_index_helmholtz().imag()));
+      
+      //Add to the interpolated value
+      interpolated_u += u_value*psi(l);
+      
+      // Loop over directions
+      for(unsigned j=0;j<2;j++)
+       {
+        interpolated_dudx[j] += u_value*dpsidx(l,j);
+       }
+     }
+    
+    //Get source function
+    //-------------------
+    // No source for the minute
+    // std::complex<double> source(0.0,0.0);
+    // get_source_helmholtz(ipt,interpolated_x,source);
+    
+    double r = interpolated_x[0];
+    double rr = r*r;
+    double n = (double)n_fourier_wavenumber();
+    double n_squared = n*n;
+     
+    // Assemble residuals and Jacobian
+    //--------------------------------
+    
+    // Loop over the test functions
+    for(unsigned l=0;l<n_node;l++)
+     {
+      
+      // first, compute the real part contribution 
+      //-------------------------------------------
+      
+      //Get the local equation
+      local_eqn_real = 
+       nodal_local_eqn(l,u_index_helmholtz().real());
+      
+      /*IF it's not a boundary condition*/
+      if(local_eqn_real >= 0)
+       {
+        // Add body force/source term and Helmholtz bit
+        
+        residuals[local_eqn_real] += 
+         -(k_squared()-n_squared/rr)*interpolated_u.real() 
+          *test(l)*r*W;
+        
+        // The Helmholtz bit itself
+        for(unsigned k=0;k<2;k++)
+         {
+          residuals[local_eqn_real] += 
+           interpolated_dudx[k].real()
+            *dtestdx(l,k)*r*W;
+         }
+        
+        // Calculate the jacobian
+        //-----------------------
+        if(flag)
+         {
+          //Loop over the velocity shape functions again
+          for(unsigned l2=0;l2<n_node;l2++)
+           { 
+            local_unknown_real = 
+             nodal_local_eqn(l2,u_index_helmholtz().real());
+            
+            //If at a non-zero degree of freedom add in the entry
+            if(local_unknown_real >= 0)
+             {
+              //Add contribution to elemental Matrix
+              for(unsigned i=0;i<2;i++)
+               {
+                jacobian(local_eqn_real,local_unknown_real) 
+                 += dpsidx(l2,i)*dtestdx(l,i)*r*W;
+               }
+              
+              // Add the helmholtz contribution
+              jacobian(local_eqn_real,local_unknown_real) +=
+               -(k_squared()-n_squared/rr)*psi(l2)*test(l)*r*W;
+              
+             }//end of local_unknown
+           }
+         }
+       }
+      
+      // Second, compute the imaginary part contribution 
+      //------------------------------------------------
+      
+      //Get the local equation
+      local_eqn_imag = nodal_local_eqn
+       (l,u_index_helmholtz().imag());
+      
+      /*IF it's not a boundary condition*/
+      if(local_eqn_imag >= 0)
+       {
+        // Add body force/source term and Helmholtz bit
+        residuals[local_eqn_imag] += 
+          -(k_squared()-n_squared/rr)*interpolated_u.imag()
+           *test(l)*r*W;
+        
+        // The Helmholtz bit itself
+        for(unsigned k=0;k<2;k++)
+         {
+          residuals[local_eqn_imag] += 
+           interpolated_dudx[k].imag()*
+            dtestdx(l,k)*r*W;
+         }
+        
+        // Calculate the jacobian
+        //-----------------------
+        if(flag)
+         {
+          //Loop over the velocity shape functions again
+          for(unsigned l2=0;l2<n_node;l2++)
+           { 
+            local_unknown_imag = nodal_local_eqn
+             (l2,u_index_helmholtz().imag());
+            
+            //If at a non-zero degree of freedom add in the entry
+            if(local_unknown_imag >= 0)
+             {
+              //Add contribution to Elemental Matrix
+              for(unsigned i=0;i<2;i++)
+               {
+                jacobian(local_eqn_imag,local_unknown_imag) 
+                 += dpsidx(l2,i)*dtestdx(l,i)*r*W;
+               }
+              // Add the helmholtz contribution
+              jacobian(local_eqn_imag,local_unknown_imag)
+               += -(k_squared()-n_squared/rr)*psi(l2)*test(l)*r*W;
+             }
+           }
+         }
+       }
+      
+     }
+   } // End of loop over integration points
+
+
+
+///////////////////////////////////////////////
+
+/*
   //Find out how many nodes there are
   const unsigned n_node = nnode();
 
@@ -140,9 +329,7 @@ void PMLHelmholtzEquations<DIM>::
                              pml_laplace_factor,
                              pml_k_squared_factor);
 
-    /* GOOD UP TO HERE
-    ///////////////////////////////////////////////////////////////
-    */
+
 
     // r is real
     std::complex<double> complex_r = std::complex<double>(interpolated_x[0], 0.0);
@@ -378,6 +565,7 @@ void PMLHelmholtzEquations<DIM>::
     }
 
   } // End of loop over integration points
+  */
 }
 
 //======================================================================
