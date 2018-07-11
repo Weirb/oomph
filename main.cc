@@ -129,7 +129,7 @@ namespace GlobalParameters
  double Alpha_shift=0.0;
  
  /// Square of the wavenumber (also known as k^2)
- double K_squared=25.0;
+ double K_squared=1.0;
 
  /// Wavenumber (also known as k),k=omega/c
  double Wavenumber=sqrt(K_squared);
@@ -143,34 +143,48 @@ namespace GlobalParameters
 
  /// Fourier wavenumber
  // If N=0, then we are solving the standard Helmholtz problem
- int N_fourier_wavenumber=0;
+ int N_fourier_wavenumber=4;
+
+ double L_squared = 0.0;
+ double L = sqrt(L_squared);
 
  /// Exact solution as a Vector of size 2, containing real and imag parts
  void get_exact_u(const Vector<double>& x, Vector<double>& u)
  {
    // Convert to cylindrical coordinates
-  //  double r = sqrt(x[0]*x[0] + x[1]*x[1]);
    double r = x[0];
+   double z = x[1];
 
    // Argument for Bessel function, scale radial distance by wavenumber
-   double kr = Wavenumber*r;
+   double r_times_ksq_lsq = r*sqrt(K_squared+L_squared);
 
-   Vector<double> jv(1);
-   Vector<double> djv(1);
-   Vector<double> yv(1);
-   Vector<double> dyv(1);
+   // Calculate one more term than the Fourier wavenumber
+   int n_terms = N_fourier_wavenumber + 1;
 
-   CRBond_Bessel::bessjyv(Wavenumber, 
-                          kr,
-                          Wavenumber,
+   Vector<double> jv(n_terms);
+   Vector<double> djv(n_terms);
+   Vector<double> yv(n_terms);
+   Vector<double> dyv(n_terms);
+   
+   double n_actual = 0;
+   CRBond_Bessel::bessjyv(n_terms, 
+                          r_times_ksq_lsq,
+                          n_actual,
                           &jv[0],&yv[0],
                           &djv[0],&dyv[0]);
 
+  // double j0,j1,y0,y1,j0p,j1p,y0p,y1p;
+  // CRBond_Bessel::bessjy01a(ksq_lsq*r,j0,j1,y0,y1,j0p,j1p,y0p,y1p);
+  
   complex<double> u_ex(0.0, 0.0);
-  u_ex+= jv[0];
+  u_ex+= jv[N_fourier_wavenumber]*exp(L*z);
   
   u[0]=u_ex.real();
   u[1]=u_ex.imag();
+  std::cout << "Do we even get here?" << std::endl;
+ 
+  // u[0] = 0.0;
+  // u[1] = 0.0;
  }
  
  FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
