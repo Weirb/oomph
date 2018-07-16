@@ -111,15 +111,23 @@ namespace GlobalParameters
   
  /// \short Problem specific parameters:
  ///------------------------------------
- /// Length of the cube in each direction
+ /// Dimensions of the mesh
+ 
+ // Mesh lengths in each direction
  double Lx=1.0;
  double Ly=1.0;
- // double Lz=1.0;
+
+ // x coordinates
+ double Xmin = 1.0;
+ double Xmax = Xmin + Lx;
+
+ // y coordinates
+ double Ymin = 1.0;
+ double Ymax = Ymin + Ly;
 
  /// Number of elements in each direction (used by SimpleCubicMesh)
  unsigned Nx=27;
  unsigned Ny=27;
- // unsigned Nz=7;
  
  /// Store the value of Pi
  double Pi=MathematicalConstants::Pi;
@@ -323,7 +331,8 @@ PMLFourierDecomposedHelmholtzProblem<ELEMENT>::PMLFourierDecomposedHelmholtzProb
  // Build the "bulk" mesh
  Bulk_mesh_pt=new RectangularQuadMesh<ELEMENT>(
   GlobalParameters::Nx,GlobalParameters::Ny,
-  GlobalParameters::Lx,GlobalParameters::Ly);
+  GlobalParameters::Xmin,GlobalParameters::Xmax,
+  GlobalParameters::Ymin,GlobalParameters::Ymax);
 
  // Create the main mesh
  add_sub_mesh(Bulk_mesh_pt);
