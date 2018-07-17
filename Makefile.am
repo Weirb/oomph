@@ -16,7 +16,7 @@ check_PROGRAMS = main
 main_SOURCES = main.cc
 
 # Required libraries
-main_LDADD = -L@libdir@ -lfourier_decomposed_helmholtz -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+main_LDADD = -L@libdir@ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 #---------------------------------------------------------------------------
 

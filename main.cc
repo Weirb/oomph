@@ -37,6 +37,8 @@
 // #include "poisson.h"
 #include "fourier_decomposed_helmholtz.h"
 
+#include "SourceFiles/pml_helmholtz.h"
+
 // The mesh
 #include "meshes.h"
 
@@ -47,53 +49,128 @@ using namespace oomph;
 
 namespace GlobalParameters {
 
-	int N_fourier = 0;
+	int N_fourier = 3;
 
-	double K_squared = 3.0;
+	double K_squared = 10.0;
 	double K = sqrt(K_squared);
 
-	double M_squared = 1.0;
-	double M = sqrt(M_squared);
+ unsigned N_terms = 6;
 
-  // Cartesian solution
-	// void get_exact_u(const Vector<double> &x, Vector<double> &u){
-	// 	u[0] = sin(sqrt(M_squared+K_squared)*x[1])*exp(-M*x[0]);
-	// 	u[1] = 0.0;
-	// }
-	
-	void get_exact_u(const Vector<double> &x, Vector<double> &u){
+  /// Coefficients in the exact solution
+ Vector<double> Coeff(N_terms,1.0);
 
-   int n_terms = N_fourier + 1;
+ /// Imaginary unit 
+ std::complex<double> I(0.0,1.0); 
 
-   Vector<double> jv(n_terms);
-   Vector<double> djv(n_terms);
-   Vector<double> yv(n_terms);
-   Vector<double> dyv(n_terms);
-   
-   double n_actual = 0;
-   CRBond_Bessel::bessjyv(n_terms, 
-                          x[0]*sqrt(K_squared-M_squared),
-                          n_actual,
-                          &jv[0],&yv[0],
-                          &djv[0],&dyv[0]);
-
-  // double j0,j1,y0,y1,j0p,j1p,y0p,y1p;
-  // CRBond_Bessel::bessjy01a(ksq_lsq*r,j0,j1,y0,y1,j0p,j1p,y0p,y1p);
+ /// Exact solution as a Vector of size 2, containing real and imag parts
+ void get_exact_u(const Vector<double>& x, Vector<double>& u)
+ {
+  // Switch to spherical coordinates
+  double R=sqrt(x[0]*x[0]+x[1]*x[1]);
   
-  complex<double> u_ex(0.0, 0.0);
-
-	for (unsigned j=0; j<5; ++j){
-		// u_ex+= jv[j]*exp(-M*x[1]);
-		u_ex += sin(sqrt(M_squared+K_squared)*x[1])*exp(-M*x[0]);
-
-	}
+  double theta;
+  theta=atan2(x[0],x[1]);
   
+  // Argument for Bessel/Hankel functions
+  double kr = sqrt(K_squared)*R;  
+  
+  // Need half-order Bessel functions
+  double bessel_offset=0.5;
+
+  // Evaluate Bessel/Hankel functions
+  Vector<double> jv(N_terms);
+  Vector<double> yv(N_terms);
+  Vector<double> djv(N_terms);
+  Vector<double> dyv(N_terms);
+  double order_max_in=double(N_terms-1)+bessel_offset;
+  double order_max_out=0;
+  
+  // This function returns vectors containing 
+  // J_k(x), Y_k(x) and their derivatives
+  // up to k=order_max, with k increasing in
+  // integer increments starting with smallest
+  // positive value. So, e.g. for order_max=3.5
+  // jv[0] contains J_{1/2}(x),
+  // jv[1] contains J_{3/2}(x),
+  // jv[2] contains J_{5/2}(x),
+  // jv[3] contains J_{7/2}(x).
+  CRBond_Bessel::bessjyv(order_max_in,
+                         kr,
+                         order_max_out,
+                         &jv[0],&yv[0],
+                         &djv[0],&dyv[0]);
+  
+  // Assemble  exact solution (actually no need to add terms
+  // below i=N_fourier as Legendre polynomial would be zero anyway)
+  complex<double> u_ex(0.0,0.0);
+  for(unsigned i=N_fourier;i<N_terms;i++)
+   {
+    //Associated_legendre_functions
+    double p=Legendre_functions_helper::plgndr2(i,N_fourier,
+                                                cos(theta));
+    // Set exact solution
+    u_ex+=Coeff[i]*sqrt(MathematicalConstants::Pi/(2.0*kr))*(jv[i]+I*yv[i])*p;
+   }
+  
+  // Get the real & imaginary part of the result
   u[0]=u_ex.real();
   u[1]=u_ex.imag();
- }
+  
+ }//end of get_exact_u
 
 	FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
 }
+
+
+//========================================================================
+// AnnularQuadMesh, derived from SimpleRectangularQuadMesh.
+//========================================================================
+template<class ELEMENT> 
+class AnnularQuadMesh : public RectangularQuadMesh<ELEMENT>
+{
+ 
+  public:
+
+ // \short Constructor for angular mesh with n_r x n_phi 
+ // 2D quad elements. Calls constructor for the underlying 
+ // SimpleRectangularQuadMesh; then deforms the mesh so that it fits 
+ // into the annular region bounded by the radii r_min and r_max
+ // and angles (in degree) of phi_min and phi_max.
+ AnnularQuadMesh(const unsigned& n_r, const unsigned& n_phi,
+                 const double& r_min, const double& r_max,
+                 const double& phi_min, const double& phi_max) :
+   RectangularQuadMesh<ELEMENT>(n_r,n_phi,1.0,1.0)
+  {
+
+   // The constructor for the  SimpleRectangularQuadMesh has
+   // built the mesh with n_x x n_y = n_r x n_phi elements in the unit
+   // square. Let's reposition the nodal points so that the mesh
+   // gets mapped into the required annular region:
+
+   // Find out how many nodes there are
+   unsigned n_node=this->nnode();
+   
+   // Loop over all nodes
+   for (unsigned n=0;n<n_node;n++)
+    {
+     // Pointer to node:
+     Node* nod_pt=this->node_pt(n);
+     
+     // Get the x/y coordinates
+     double x_old=nod_pt->x(0);
+     double y_old=nod_pt->x(1);
+
+     // Map from the old x/y to the new r/phi:
+     double r=r_min+(r_max-r_min)*x_old;
+     double phi=(phi_min+(phi_max-phi_min)*y_old)*
+      MathematicalConstants::Pi/180.0;
+
+     // Set new nodal coordinates
+     nod_pt->x(0)=r*cos(phi);
+     nod_pt->x(1)=r*sin(phi);
+    }
+  }
+};
 
 
 //====== start_of_problem_class=======================================
@@ -135,22 +212,24 @@ public:
 template<class ELEMENT>
 PoissonProblem<ELEMENT>::PoissonProblem()
 { 
- // Setup mesh
-
- // # of elements in x-direction
- unsigned n_x=4;
-
- // # of elements in y-direction
- unsigned n_y=4;
-
- // Domain length in x-direction
- double l_x=1.0;
-
- // Domain length in y-direction
- double l_y=1.0;
-
+ // Build annular mesh
+ // # of elements in r-direction 
+ unsigned n_r=10;
+ 
+ // # of elements in theta-direction 
+ unsigned n_theta=10;
+ 
+ // Domain boundaries in theta-direction
+ double theta_min=-90.0;
+ double theta_max=90.0;
+ 
+ // Domain boundaries in r-direction
+ double r_min=1.0;
+ double r_max=3.0;
+ 
  // Build and assign mesh
- mesh_pt() = new RectangularQuadMesh<ELEMENT>(n_x,n_y,l_x,l_y);
+ mesh_pt() = 
+  new AnnularQuadMesh<ELEMENT>(n_r,n_theta,r_min,r_max,theta_min,theta_max);
 
  // Set the boundary conditions for this problem: All nodes are
  // free by default -- only need to pin the ones that have Dirichlet conditions
@@ -162,7 +241,7 @@ PoissonProblem<ELEMENT>::PoissonProblem()
    for (unsigned n=0;n<n_node;n++)
     {
      mesh_pt()->boundary_node_pt(i,n)->pin(0); 
-		 mesh_pt()->boundary_node_pt(i,n)->pin(1); 
+		   mesh_pt()->boundary_node_pt(i,n)->pin(1); 
     }
   }
 
@@ -179,7 +258,7 @@ PoissonProblem<ELEMENT>::PoissonProblem()
 
    //Set the source function pointer
    el_pt->k_squared_pt()=&GlobalParameters::K_squared;
-	//  el_pt->fourier_wavenumber_pt()=&GlobalParameters::N_fourier;
+	  el_pt->n_fourier_wavenumber_pt()=&GlobalParameters::N_fourier;
   }
 
 
@@ -289,8 +368,10 @@ int main()
  // Create the problem with 2D nine-node elements from the
  // QPoissonElement family. Pass pointer to source function. 
 //  typedef QPoissonElement<2,2> ELEMENT;
- typedef QFourierDecomposedHelmholtzElement<3> ELEMENT;
+ // typedef QFourierDecomposedHelmholtzElement<3> ELEMENT;
+ typedef QPMLHelmholtzElement<2,3> ELEMENT;
 //  typedef QHelmholtzElement<2,3> ELEMENT;
+
  PoissonProblem<ELEMENT> problem;
 
  // Create label for output
