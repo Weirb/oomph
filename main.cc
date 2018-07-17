@@ -47,7 +47,7 @@ using namespace oomph;
 
 namespace GlobalParameters {
 
-	int N_fourier = 5;
+	int N_fourier = 0;
 
 	double K_squared = 3.0;
 	double K = sqrt(K_squared);
@@ -55,8 +55,8 @@ namespace GlobalParameters {
 	double M_squared = 1.0;
 	double M = sqrt(M_squared);
 
+  // Cartesian solution
 	// void get_exact_u(const Vector<double> &x, Vector<double> &u){
-
 	// 	u[0] = sin(sqrt(M_squared+K_squared)*x[1])*exp(-M*x[0]);
 	// 	u[1] = 0.0;
 	// }
@@ -81,17 +81,16 @@ namespace GlobalParameters {
   // CRBond_Bessel::bessjy01a(ksq_lsq*r,j0,j1,y0,y1,j0p,j1p,y0p,y1p);
   
   complex<double> u_ex(0.0, 0.0);
-  u_ex+= jv[N_fourier]*exp(M*x[1]);
+
+	for (unsigned j=0; j<5; ++j){
+		// u_ex+= jv[j]*exp(-M*x[1]);
+		u_ex += sin(sqrt(M_squared+K_squared)*x[1])*exp(-M*x[0]);
+
+	}
   
   u[0]=u_ex.real();
   u[1]=u_ex.imag();
-
-
-
-		// u[0] = sin(sqrt(M_squared+K_squared)*x[1])*exp(-M*x[0]);
-		// u[1] = 0.0;
-	}
-
+ }
 
 	FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
 }
@@ -180,7 +179,7 @@ PoissonProblem<ELEMENT>::PoissonProblem()
 
    //Set the source function pointer
    el_pt->k_squared_pt()=&GlobalParameters::K_squared;
-	 el_pt->fourier_wavenumber_pt()=&GlobalParameters::N_fourier;
+	//  el_pt->fourier_wavenumber_pt()=&GlobalParameters::N_fourier;
   }
 
 
@@ -291,6 +290,7 @@ int main()
  // QPoissonElement family. Pass pointer to source function. 
 //  typedef QPoissonElement<2,2> ELEMENT;
  typedef QFourierDecomposedHelmholtzElement<3> ELEMENT;
+//  typedef QHelmholtzElement<2,3> ELEMENT;
  PoissonProblem<ELEMENT> problem;
 
  // Create label for output
@@ -318,9 +318,9 @@ int main()
   }
 
 	// Solve the problem
-   problem.newton_solve();
+	problem.newton_solve();
 
-   //Output the solution
-   problem.doc_solution(doc_info);
+	//Output the solution
+	problem.doc_solution(doc_info);
 
 } //end of main
