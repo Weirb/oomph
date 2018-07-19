@@ -84,7 +84,7 @@ namespace GlobalParameters
  /// \short The choice of linear solver
  ///    0 = SuperLU
  ///    1 = Multigrid
- unsigned Linear_solver_flag=0;
+ unsigned Linear_solver_flag=1;
  
  /// \short The MG solver allows for five different levels of output:
  ///    0 = Outputs everything
@@ -109,9 +109,9 @@ namespace GlobalParameters
  /// Laplacian preconditioner (CSLP)
  double Alpha_shift=0.0;
 
- int N_fourier = 0;
+ int N_fourier = 2;
 
-	double K_squared = 10.0;
+	double K_squared = 4.0;
 	double K = sqrt(K_squared);
 
  unsigned N_terms = 6;
@@ -351,7 +351,11 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
  problem_is_nonlinear(true);
 
  // Set the number of Newton iterations to one
+ //max_newton_iterations()=1;
  max_newton_iterations()=10;
+
+ // Increase the maximum residuals
+ max_residuals()=15.0;
 
  // Set up solver specific information:
  //------------------------------------
@@ -473,7 +477,8 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
  solver_pt->max_iter()=200;
 
  // Set the tolerance (to ensure the Newton solver converges in one step)
- solver_pt->tolerance()=1.0e-10;
+ //solver_pt->tolerance()=1.0e-10;
+ solver_pt->tolerance()=1.0e-7;
    
  // If the user wishes to document the convergence information
  if (GlobalParameters::Doc_convergence_flag)
@@ -488,6 +493,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
  // This preconditioner uses multigrid on the block version of the full
  // matrix. 2 V-cycles will be used here per preconditioning step
  HelmholtzMGPreconditioner<2>* prec_pt=new HelmholtzMGPreconditioner<2>(this);
+ //SuperLUPreconditioner* prec_pt = new SuperLUPreconditioner();
 
  // Set preconditioner
  solver_pt->preconditioner_pt()=prec_pt;
