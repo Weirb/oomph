@@ -98,6 +98,9 @@ namespace GlobalParameters
  ///    0 = Don't display convergence information
  ///    1 = Display convergence information
  unsigned Doc_convergence_flag=0;
+
+ // Specify the number of V-cycles to perform in the preconditioner
+ unsigned Nvcycle=1;
  
  /// DocInfo object used for documentation of the solution
  DocInfo Doc_info;
@@ -109,14 +112,17 @@ namespace GlobalParameters
  /// Laplacian preconditioner (CSLP)
  double Alpha_shift=0.0;
 
+ // Fourier wavenumber
  int N_fourier = 2;
 
-	double K_squared = 4.0;
-	double K = sqrt(K_squared);
+ // Helmholtz frequency
+ double K_squared = 4.0;
+ double K = sqrt(K_squared);
 
+ // Number of terms in the solution
  unsigned N_terms = 6;
 
-  /// Coefficients in the exact solution
+ /// Coefficients in the exact solution
  Vector<double> Coeff(N_terms,1.0);
 
  /// Imaginary unit 
@@ -351,8 +357,7 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
  problem_is_nonlinear(true);
 
  // Set the number of Newton iterations to one
- //max_newton_iterations()=1;
- max_newton_iterations()=10;
+ max_newton_iterations()=1;
 
  // Increase the maximum residuals
  max_residuals()=15.0;
@@ -478,7 +483,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
 
  // Set the tolerance (to ensure the Newton solver converges in one step)
  //solver_pt->tolerance()=1.0e-10;
- solver_pt->tolerance()=1.0e-7;
+ solver_pt->tolerance()=1.0e-10;
    
  // If the user wishes to document the convergence information
  if (GlobalParameters::Doc_convergence_flag)
@@ -489,7 +494,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
  
  // Create linear solver 
  linear_solver_pt()=solver_pt;
- 
+
  // This preconditioner uses multigrid on the block version of the full
  // matrix. 2 V-cycles will be used here per preconditioning step
  HelmholtzMGPreconditioner<2>* prec_pt=new HelmholtzMGPreconditioner<2>(this);
@@ -500,6 +505,9 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
   
  // Set the shift
  prec_pt->alpha_shift()=GlobalParameters::Alpha_shift;
+
+ // Set the number of V-cycles
+ prec_pt->n_v_cycle()=GlobalParameters::Nvcycle;
    
  // If the user wants to use damped Jacobi on every level as a smoother
  if (GlobalParameters::Pre_smoother_flag==1)
@@ -774,7 +782,15 @@ int main(int argc,char **argv)
  // Choose the value of k^2
  CommandLineArgs::specify_command_line_flag(
   "--k_sq",&GlobalParameters::K_squared);
- 
+
+ // Choose the value of Fourier wavenumber, N_fourier
+ CommandLineArgs::specify_command_line_flag(
+  "--n_fourier",&GlobalParameters::N_fourier);
+
+ // Choose the number of V-cycles in the preconditioner 
+ CommandLineArgs::specify_command_line_flag(
+  "--vcycles",&GlobalParameters::Nvcycle);
+
  // Choose the value of the shift in the CSLP
  CommandLineArgs::specify_command_line_flag(
   "--alpha",&GlobalParameters::Alpha_shift);

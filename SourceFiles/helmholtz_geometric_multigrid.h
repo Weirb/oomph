@@ -195,6 +195,11 @@ namespace oomph
     // Return the alpha shift value
     return Alpha_shift;
    } // End of alpha_shift
+
+  unsigned& n_v_cycle()
+  {
+  	return Nvcycle;
+  }
   
   /// Disable time documentation
   void disable_doc_time()
