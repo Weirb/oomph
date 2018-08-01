@@ -118,17 +118,45 @@ void PMLHelmholtzEquations<DIM>::
        }
      }
     
-    //Get source function
-    //-------------------
-    // No source for the minute
-    // std::complex<double> source(0.0,0.0);
-    // get_source_helmholtz(ipt,interpolated_x,source);
-    
-    double r = interpolated_x[0];
-    double rr = r*r;
+    // Create complex variable for the real radial distance
+    std::complex<double> r(interpolated_x[0],0.0);
+    std::complex<double> rr = r*r;
+
+    // Fourier wavenumber
     double n = (double)n_fourier_wavenumber();
-    double n_squared = n*n;
-     
+    double nn = n*n;
+
+    // Complex alpha contribution
+    std::complex<double> alpha_factor(1.0, alpha());
+
+    // Compute the Jacobians
+    //----------------------
+
+    // Jacobian for the Helmholtz term
+    std::complex<double> k_squared_jacobian =
+      -alpha_factor*(k_squared()-nn/rr)*r*W;
+
+    // Jacobian for the Laplacian
+    Vector<std::complex<double> > laplace_jacobian(2);
+    for (unsigned k=0;k<2;k++)
+    {
+      laplace_jacobian[k] = r*W;
+    }
+
+    // Compute the residuals
+    //----------------------
+
+    // Residual for the Helmholtz term
+    std::complex<double> k_squared_residual =
+    k_squared_jacobian*interpolated_u;
+
+    // Residual for the Laplacian
+    Vector<std::complex<double> > laplace_residual(2);
+    for (unsigned k=0;k<2;k++)
+    {
+      laplace_residual[k] = laplace_jacobian[k]*interpolated_dudx[k];
+    }
+
     // Assemble residuals and Jacobian
     //--------------------------------
     
@@ -142,23 +170,80 @@ void PMLHelmholtzEquations<DIM>::
       //Get the local equation
       local_eqn_real = 
        nodal_local_eqn(l,u_index_helmholtz().real());
+      local_eqn_imag =
+        nodal_local_eqn(l,u_index_helmholtz().imag());
       
       /*IF it's not a boundary condition*/
       if(local_eqn_real >= 0)
        {
-        // Add body force/source term and Helmholtz bit
+        // Add the Helmholtz term to the residuals
+        residuals[local_eqn_real]+=k_squared_residual.real()*test(l);
+
+        // Add the Laplace term to the residuals
+        for (unsigned k=0;k<2;k++)
+        {
+          residuals[local_eqn_real]+=laplace_residual[k].real()*dtestdx(l,k);
+        }
         
-        residuals[local_eqn_real] += 
-         -(k_squared()-n_squared/rr)*interpolated_u.real() 
-          *test(l)*r*W;
-        
-        // The Helmholtz bit itself
-        for(unsigned k=0;k<2;k++)
+        // Calculate the jacobian
+        //-----------------------
+        if(flag)
          {
-          residuals[local_eqn_real] += 
-           interpolated_dudx[k].real()
-            *dtestdx(l,k)*r*W;
-         }
+          //Loop over the velocity shape functions again
+          for(unsigned l2=0;l2<n_node;l2++)
+           {
+            local_unknown_real = 
+             nodal_local_eqn(l2,u_index_helmholtz().real());
+            local_unknown_imag =
+              nodal_local_eqn(l2,u_index_helmholtz().imag());
+            
+            //If at a non-zero degree of freedom add in the entry
+            if(local_unknown_real >= 0)
+             {
+              // Add the Helmholtz term to the Jacobian
+              jacobian(local_eqn_real, local_unknown_real) +=
+                k_squared_jacobian.real()*psi(l2)*test(l);
+              
+              // Add the Laplace term to the Jacobian
+              for (unsigned k=0;k<2;k++)
+              {
+                jacobian(local_eqn_real,local_unknown_real) +=
+                  laplace_jacobian[k].real()*dpsidx(l2,k)*dtestdx(l,k);
+              }
+             }//end of local_unknown_real
+
+             // If at a nonzero degree of freedom add in the entry
+             if(local_unknown_imag >= 0)
+             {
+              // Add the Helmholtz term to the Jacobian
+              jacobian(local_eqn_real, local_unknown_imag) +=
+                -k_squared_jacobian.imag()*psi(l2)*test(l);
+              
+              // Add the Laplace term to the Jacobian
+              for (unsigned k=0;k<2;k++)
+              {
+                jacobian(local_eqn_real,local_unknown_imag) +=
+                  -laplace_jacobian[k].imag()*dpsidx(l2,k)*dtestdx(l,k);
+              }
+             }//end of local_unknown_imag
+           }
+         } // end of if(flag)
+       } // end of local_eqn_real
+      
+      // Second, compute the imaginary part contribution 
+      //------------------------------------------------
+      
+      /*IF it's not a boundary condition*/
+      if(local_eqn_imag >= 0)
+       {
+        // Add the Helmholtz term to the residuals
+        residuals[local_eqn_imag]+=k_squared_residual.imag()*test(l);
+
+        // Add the Laplace term to the residuals
+        for (unsigned k=0;k<2;k++)
+        {
+          residuals[local_eqn_imag]+=laplace_residual[k].imag()*dtestdx(l,k);
+        }
         
         // Calculate the jacobian
         //-----------------------
@@ -168,404 +253,44 @@ void PMLHelmholtzEquations<DIM>::
           for(unsigned l2=0;l2<n_node;l2++)
            { 
             local_unknown_real = 
-             nodal_local_eqn(l2,u_index_helmholtz().real());
-            
-            //If at a non-zero degree of freedom add in the entry
-            if(local_unknown_real >= 0)
-             {
-              //Add contribution to elemental Matrix
-              for(unsigned i=0;i<2;i++)
-               {
-                jacobian(local_eqn_real,local_unknown_real) 
-                 += dpsidx(l2,i)*dtestdx(l,i)*r*W;
-               }
-              
-              // Add the helmholtz contribution
-              jacobian(local_eqn_real,local_unknown_real) +=
-               -(k_squared()-n_squared/rr)*psi(l2)*test(l)*r*W;
-              
-             }//end of local_unknown
-           }
-         }
-       }
-      
-      // Second, compute the imaginary part contribution 
-      //------------------------------------------------
-      
-      //Get the local equation
-      local_eqn_imag = nodal_local_eqn
-       (l,u_index_helmholtz().imag());
-      
-      /*IF it's not a boundary condition*/
-      if(local_eqn_imag >= 0)
-       {
-        // Add body force/source term and Helmholtz bit
-        residuals[local_eqn_imag] += 
-          -(k_squared()-n_squared/rr)*interpolated_u.imag()
-           *test(l)*r*W;
-        
-        // The Helmholtz bit itself
-        for(unsigned k=0;k<2;k++)
-         {
-          residuals[local_eqn_imag] += 
-           interpolated_dudx[k].imag()*
-            dtestdx(l,k)*r*W;
-         }
-        
-        // Calculate the jacobian
-        //-----------------------
-        if(flag)
-         {
-          //Loop over the velocity shape functions again
-          for(unsigned l2=0;l2<n_node;l2++)
-           { 
-            local_unknown_imag = nodal_local_eqn
-             (l2,u_index_helmholtz().imag());
+              nodal_local_eqn(l2,u_index_helmholtz().real());
+            local_unknown_imag = 
+              nodal_local_eqn(l2,u_index_helmholtz().imag());
             
             //If at a non-zero degree of freedom add in the entry
             if(local_unknown_imag >= 0)
              {
-              //Add contribution to Elemental Matrix
-              for(unsigned i=0;i<2;i++)
-               {
-                jacobian(local_eqn_imag,local_unknown_imag) 
-                 += dpsidx(l2,i)*dtestdx(l,i)*r*W;
-               }
-              // Add the helmholtz contribution
-              jacobian(local_eqn_imag,local_unknown_imag)
-               += -(k_squared()-n_squared/rr)*psi(l2)*test(l)*r*W;
-             }
-           }
-         }
-       }
-      
-     }
-   } // End of loop over integration points
-
-
-
-///////////////////////////////////////////////
-
-/*
-  //Find out how many nodes there are
-  const unsigned n_node = nnode();
-
-  //Set up memory for the shape and test functions
-  Shape psi(n_node), test(n_node);
-  DShape dpsidx(n_node, DIM), dtestdx(n_node, DIM);
-
-  //Set the value of n_intpt
-  const unsigned n_intpt = integral_pt()->nweight();
-
-  //Integers to store the local equation and unknown numbers
-  int local_eqn_real = 0, local_unknown_real = 0;
-  int local_eqn_imag = 0, local_unknown_imag = 0;
-
-  //Loop over the integration points
-  for (unsigned ipt = 0; ipt < n_intpt; ipt++)
-  {
-    //Get the integral weight
-    double w = integral_pt()->weight(ipt);
-
-    //Call the derivatives of the shape and test functions
-    double J = dshape_and_dtest_eulerian_at_knot_helmholtz(ipt, psi, dpsidx,
-                                                           test, dtestdx);
-
-    //Premultiply the weights and the Jacobian
-    double W = w * J;
-
-    //Calculate local values of unknown
-    //Allocate and initialise to zero
-    std::complex<double> interpolated_u(0.0, 0.0);
-    Vector<double> interpolated_x(DIM, 0.0);
-    Vector<std::complex<double> > interpolated_dudx(DIM);
-
-    //Calculate function value and derivatives:
-    //-----------------------------------------
-    // Loop over nodes
-    for (unsigned l = 0; l < n_node; l++)
-    {
-      // Loop over directions
-      for (unsigned j = 0; j < DIM; j++)
-      {
-        interpolated_x[j] += raw_nodal_position(l, j) * psi(l);
-      }
-
-      //Get the nodal value of the helmholtz unknown
-      const std::complex<double>
-          u_value(raw_nodal_value(l, u_index_helmholtz().real()),
-                  raw_nodal_value(l, u_index_helmholtz().imag()));
-
-      //Add to the interpolated value
-      interpolated_u += u_value * psi(l);
-
-      // Loop over directions
-      for (unsigned j = 0; j < DIM; j++)
-      {
-        interpolated_dudx[j] += u_value * dpsidx(l, j);
-      }
-    }
-
-    //Get source function
-    //-------------------
-    std::complex<double> source(0.0, 0.0);
-    get_source_helmholtz(ipt, interpolated_x, source);
-
-    // Get the Fourier wavenumber
-    double n = (double)n_fourier_wavenumber();
-    double n_squared = n * n;
-
-    // Declare a vector of complex numbers for pml weights on the Laplace bit
-    Vector<std::complex<double> > pml_laplace_factor(DIM);
-    // Declare a complex number for pml weights on the mass matrix bit
-    std::complex<double> pml_k_squared_factor = std::complex<double>(1.0, 0.0);
-
-    // All the PML weights that participate in the assemby process
-    // are computed here. pml_laplace_factor will contain the entries
-    // for the Laplace bit, while pml_k_squared_factor contains the contributions
-    // to the Helmholtz bit. Both default to 1.0, should the PML not be
-    // enabled via enable_pml.
-    compute_pml_coefficients(ipt, interpolated_x,
-                             pml_laplace_factor,
-                             pml_k_squared_factor);
-
-
-
-    // r is real
-    std::complex<double> complex_r = std::complex<double>(interpolated_x[0], 0.0);
-
-    // Jacobian
-    std::complex<double> pml_k_squared_jacobian = 
-     - pml_k_squared_factor * ( k_squared() - n_squared / (complex_r * complex_r))
-     * complex_r * W;
-
-    // Laplace term
-    Vector<std::complex<double> > pml_laplace_jacobian(2);
-    for (unsigned k=0;k<2;k++)
-    {
-     pml_laplace_jacobian[k] = pml_laplace_factor[k]* complex_r * W;
-    }
-
-    // Calculate residuals
-    // -------------------
-    // Note: it is a linear equation so residual = jacobian * u
-    std::complex<double> pml_k_squared_residual = pml_k_squared_jacobian * interpolated_u;
-    
-    // Term from the Laplace operator
-    Vector<std::complex<double> > pml_laplace_residual(2);
-    for (unsigned k=0;k<2;k++)
-     {
-      pml_laplace_residual[k] = pml_laplace_jacobian[k] * interpolated_dudx[k];
-     }
-
-    //Alpha adjusts the pml factors, the imaginary part produces cross terms
-    std::complex<double> alpha_pml_k_squared_factor = std::complex<double>(
-      pml_k_squared_factor.real() - alpha() * pml_k_squared_factor.imag(),
-       alpha() * pml_k_squared_factor.real() + pml_k_squared_factor.imag());
-    
-    // Assemble residuals and Jacobian
-    //--------------------------------
-    // Loop over the test functions
-    for (unsigned l = 0; l < n_node; l++)
-    {
-
-      // first, compute the real part contribution
-      //-------------------------------------------
-
-      //Get the local equation
-      local_eqn_real = nodal_local_eqn(l, u_index_helmholtz().real());
-      local_eqn_imag = nodal_local_eqn(l, u_index_helmholtz().imag());
-
-      //IF it's not a boundary condition
-      if (local_eqn_real >= 0)
-      {
-        // // Add body force/source term and Helmholtz bit
-        // residuals[local_eqn_real] +=
-        //     (source.real() - (
-        //      alpha_pml_k_squared_factor.real() * k_squared() * interpolated_u.real() 
-        //      - alpha_pml_k_squared_factor.imag() * k_squared() * interpolated_u.imag()
-        //     )) * test(l) * W;
-
-        // // The Laplace bit
-        // for (unsigned k = 0; k < DIM; k++)
-        // {
-        //   residuals[local_eqn_real] +=
-        //       (pml_laplace_factor[k].real() * interpolated_dudx[k].real() - pml_laplace_factor[k].imag() * interpolated_dudx[k].imag()) * dtestdx(l, k) * W;
-        // }
-
-        // Add k squared term of equation 
-       residuals[local_eqn_real] += pml_k_squared_residual.real()*test(l);
-
-       // Add the term from the Laplace operator
-       for (unsigned k=0;k<2;k++)
-        {
-         residuals[local_eqn_real]+=pml_laplace_residual[k].real()*dtestdx(l,k);
-        }
-
-        // Calculate the jacobian
-        //-----------------------
-        if (flag)
-        {
-          //Loop over the velocity shape functions again
-          for (unsigned l2 = 0; l2 < n_node; l2++)
-          {
-            local_unknown_real = nodal_local_eqn(l2, u_index_helmholtz().real());
-            local_unknown_imag = nodal_local_eqn(l2, u_index_helmholtz().imag());
-
-            //If at a non-zero degree of freedom add in the entry
-            if (local_unknown_real >= 0)
-            {
-              // //Add contribution to Elemental Matrix
-              // for (unsigned i = 0; i < DIM; i++)
-              // {
-              //   jacobian(local_eqn_real, local_unknown_real) += pml_laplace_factor[i].real() * dpsidx(l2, i) * dtestdx(l, i) * W;
-              // }
-              // // Add the helmholtz contribution
-              // jacobian(local_eqn_real, local_unknown_real) += -alpha_pml_k_squared_factor.real() * k_squared() * psi(l2) * test(l) * W;
+              // Add the Helmholtz term to the Jacobian
+              jacobian(local_eqn_imag, local_unknown_imag) +=
+                k_squared_jacobian.real()*psi(l2)*test(l);
               
-
-              // Add the helmholtz contribution to the jacobian
-              jacobian(local_eqn_real,local_unknown_real) +=
-              pml_k_squared_jacobian.real() * psi(l2)*test(l);
-
-              // Add the term from the Laplace operator to the jacobian
+              // Add the Laplace term to the Jacobian
               for (unsigned k=0;k<2;k++)
               {
-               jacobian(local_eqn_real,local_unknown_real) +=
-                pml_laplace_jacobian[k].real()*dpsidx(l2,k)*dtestdx(l,k);
+                jacobian(local_eqn_imag,local_unknown_imag) +=
+                  laplace_jacobian[k].real()*dpsidx(l2,k)*dtestdx(l,k);
               }
-
-
-            }
-            //If at a non-zero degree of freedom add in the entry
-            if (local_unknown_imag >= 0)
-            {
-              // //Add contribution to Elemental Matrix
-              // for (unsigned i = 0; i < DIM; i++)
-              // {
-              //   jacobian(local_eqn_real, local_unknown_imag) -= pml_laplace_factor[i].imag() * dpsidx(l2, i) * dtestdx(l, i) * W;
-              // }
-              // // Add the helmholtz contribution
-              // jacobian(local_eqn_real, local_unknown_imag) += alpha_pml_k_squared_factor.imag() * k_squared() * psi(l2) * test(l) * W;
-              
-              
-              // Add k squared term to jacobian
-             jacobian(local_eqn_real,local_unknown_imag) +=
-              - pml_k_squared_jacobian.imag()*psi(l2)*test(l);
-
-             //Add contribution to elemental Matrix
-             for (unsigned k=0;k<2;k++)
-              {
-               jacobian(local_eqn_real,local_unknown_imag) +=
-                - pml_laplace_jacobian[k].imag()*dpsidx(l2,k)*dtestdx(l,k);
-              }
-
-
-            }
-          }
-        }
-      }
-
-      // Second, compute the imaginary part contribution
-      //------------------------------------------------
-
-      //Get the local equation
-      local_eqn_imag = nodal_local_eqn(l, u_index_helmholtz().imag());
-      local_eqn_real = nodal_local_eqn(l, u_index_helmholtz().real());
-
-      // IF it's not a boundary condition
-      if (local_eqn_imag >= 0)
-      {
-        // // Add body force/source term and Helmholtz bit
-        // residuals[local_eqn_imag] +=
-        //     (source.imag() -
-        //      (alpha_pml_k_squared_factor.imag() * k_squared() * interpolated_u.real() + alpha_pml_k_squared_factor.real() * k_squared() * interpolated_u.imag())) *
-        //     test(l) * W;
-
-        // // The Laplace bit
-        // for (unsigned k = 0; k < DIM; k++)
-        // {
-        //   residuals[local_eqn_imag] += 
-        //       (pml_laplace_factor[k].imag() * interpolated_dudx[k].real() + pml_laplace_factor[k].real() * interpolated_dudx[k].imag()) * dtestdx(l, k) * W;
-        // }
-
-        // Add k squared term of equation
-       residuals[local_eqn_imag] += pml_k_squared_residual.imag()*test(l);
-
-       // Add the term from the Laplace operator
-       for (unsigned k=0;k<2;k++)
-        {
-         residuals[local_eqn_imag]+=pml_laplace_residual[k].imag()*dtestdx(l,k);
-        }
-
-
-
-        // Calculate the jacobian
-        //-----------------------
-        if (flag)
-        {
-          //Loop over the velocity shape functions again
-          for (unsigned l2 = 0; l2 < n_node; l2++)
-          {
-            local_unknown_imag = nodal_local_eqn(l2, u_index_helmholtz().imag());
-            local_unknown_real = nodal_local_eqn(l2, u_index_helmholtz().real());
+             } // End of local_unknown_imag
 
             //If at a non-zero degree of freedom add in the entry
-            if (local_unknown_imag >= 0)
-            {
-              // //Add contribution to Elemental Matrix
-              // for (unsigned i = 0; i < DIM; i++)
-              // {
-              //   jacobian(local_eqn_imag, local_unknown_imag) += pml_laplace_factor[i].real() * dpsidx(l2, i) * dtestdx(l, i) * W;
-              // }
-              // // Add the helmholtz contribution
-              // jacobian(local_eqn_imag, local_unknown_imag) += -alpha_pml_k_squared_factor.real() * k_squared() * psi(l2) * test(l) * W;
-            
-
-             //Add the helmholtz contribution
-             jacobian(local_eqn_imag,local_unknown_imag) +=
-              pml_k_squared_jacobian.real()*psi(l2)*test(l);
-
-             //Add contribution to elemental Matrix
-             for (unsigned k=0;k<2;k++)
+            if(local_unknown_real >= 0)
+             {
+              // Add the Helmholtz term to the Jacobian
+              jacobian(local_eqn_imag, local_unknown_real) +=
+                k_squared_jacobian.imag()*psi(l2)*test(l);
+              
+              // Add the Laplace term to the Jacobian
+              for (unsigned k=0;k<2;k++)
               {
-               jacobian(local_eqn_imag,local_unknown_imag) +=
-                pml_laplace_jacobian[k].real()*dpsidx(l2,k)*dtestdx(l,k);
+                jacobian(local_eqn_imag,local_unknown_real) +=
+                  laplace_jacobian[k].imag()*dpsidx(l2,k)*dtestdx(l,k);
               }
-
-
-            }
-            if (local_unknown_real >= 0)
-            {
-              // //Add contribution to Elemental Matrix
-              // for (unsigned i = 0; i < DIM; i++)
-              // {
-              //   jacobian(local_eqn_imag, local_unknown_real) += pml_laplace_factor[i].imag() * dpsidx(l2, i) * dtestdx(l, i) * W;
-              // }
-              // // Add the helmholtz contribution
-              // jacobian(local_eqn_imag, local_unknown_real) += -alpha_pml_k_squared_factor.imag() * k_squared() * psi(l2) * test(l) * W;
-            
-            
-             //Add the helmholtz contribution
-             jacobian(local_eqn_imag,local_unknown_real) +=
-              pml_k_squared_jacobian.imag()*psi(l2)*test(l);
-
-             //Add contribution to elemental Matrix
-             for (unsigned k=0;k<2;k++)
-              {
-               jacobian(local_eqn_imag,local_unknown_real) +=
-                pml_laplace_jacobian[k].imag()*dpsidx(l2,k)*dtestdx(l,k);
-              }
-
-
-            }
-          }
-        }
-      }
-    }
-
-  } // End of loop over integration points
-  */
+             } // End of local_unknown_real
+           }
+         } // End of if(flag)
+       } // End of local_eqn_imag
+     } // End of loop over integration points
+   }
 }
 
 //======================================================================
