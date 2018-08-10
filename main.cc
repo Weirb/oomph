@@ -42,6 +42,7 @@
 // The mesh
 #include "meshes.h"
 
+#include "fenv.h"
 using namespace std;
 
 using namespace oomph;
@@ -749,6 +750,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::doc_solution()
 int main(int argc,char **argv)
 {
 
+	feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
  //------------------------
  // Command line arguments
  //------------------------
