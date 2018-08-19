@@ -108,17 +108,38 @@ namespace GlobalParameters
  
  // Pointer to the output stream -- defaults to oomph_info
  std::ostream* Stream_pt;
+
+ // Use the 1D test problem?
+ // 	0 = standard problem, Helmholtz/Poisson
+ //		1 = solve the test problem
+ unsigned One_dimensional_test_problem = 0;
   
  /// Choose the value of the shift to create the complex-shifted
  /// Laplacian preconditioner (CSLP)
  double Alpha_shift=0.0;
 
  // Fourier wavenumber
- int N_fourier = 2;
+ int N_fourier = 0;
 
  // Helmholtz frequency
- double K_squared = 4.0;
+ double K_squared = 0.0;
  double K = sqrt(K_squared);
+
+ // Mesh length in the R direction
+ double R_min = 1.0;
+ double R_max = R_min + 1.0;
+ 
+ // Mesh length in the Z direction
+ double Z_min = 0.0;
+ double Z_max = Z_min + 1.0;
+
+ // Mesh length in the R direction (test problem)
+ double R_min_test = 1.0;
+ double R_max_test = R_min_test + 1.0;
+ 
+ // Mesh length in the Z direction (test problem)
+ double Z_min_test = -0.1;
+ double Z_max_test = 0.1;
 
  // Number of terms in the solution
  unsigned N_terms = 6;
@@ -132,56 +153,130 @@ namespace GlobalParameters
  /// Exact solution as a Vector of size 2, containing real and imag parts
  void get_exact_u(const Vector<double>& x, Vector<double>& u)
  {
-  // Switch to spherical coordinates
-  double R=sqrt(x[0]*x[0]+x[1]*x[1]);
-  
-  double theta;
-  theta=atan2(x[0],x[1]);
-  
-  // Argument for Bessel/Hankel functions
-  double kr = sqrt(K_squared)*R;  
-  
-  // Need half-order Bessel functions
-  double bessel_offset=0.5;
 
-  // Evaluate Bessel/Hankel functions
-  Vector<double> jv(N_terms);
-  Vector<double> yv(N_terms);
-  Vector<double> djv(N_terms);
-  Vector<double> dyv(N_terms);
-  double order_max_in=double(N_terms-1)+bessel_offset;
-  double order_max_out=0;
-  
-  // This function returns vectors containing 
-  // J_k(x), Y_k(x) and their derivatives
-  // up to k=order_max, with k increasing in
-  // integer increments starting with smallest
-  // positive value. So, e.g. for order_max=3.5
-  // jv[0] contains J_{1/2}(x),
-  // jv[1] contains J_{3/2}(x),
-  // jv[2] contains J_{5/2}(x),
-  // jv[3] contains J_{7/2}(x).
-  CRBond_Bessel::bessjyv(order_max_in,
-                         kr,
-                         order_max_out,
-                         &jv[0],&yv[0],
-                         &djv[0],&dyv[0]);
-  
-  // Assemble  exact solution (actually no need to add terms
-  // below i=N_fourier as Legendre polynomial would be zero anyway)
-  complex<double> u_ex(0.0,0.0);
-  for(unsigned i=N_fourier;i<N_terms;i++)
-   {
-    //Associated_legendre_functions
-    double p=Legendre_functions_helper::plgndr2(i,N_fourier,
-                                                cos(theta));
-    // Set exact solution
-    u_ex+=Coeff[i]*sqrt(MathematicalConstants::Pi/(2.0*kr))*(jv[i]+I*yv[i])*p;
-   }
-  
-  // Get the real & imaginary part of the result
-  u[0]=u_ex.real();
-  u[1]=u_ex.imag();
+	 // Solve the one dimensional test problem
+	 if (One_dimensional_test_problem == 1){
+		
+		// Ensure parameters are set for this problem
+		N_fourier = 0;
+		K_squared = 0.0;
+		
+		// radial coordinate
+		double R=x[0];
+
+		// exact solution
+		complex<double> u_ex(0.0,0.0);
+
+		// Solution to (r*u'(r))'/r=0 is u(r)=A*log(r)+B
+		u_ex += 6.0*log(R) + 2.0;
+		
+		// Get the real & imaginary part of the result
+		u[0]=u_ex.real();
+		u[1]=u_ex.imag();
+	 }
+
+	 // We are solving the Poisson problem if k^2 = 0
+	 // Avoid divide by 0 error with separate exact solution
+	 // Also avoid == comparison with double
+	 else {
+		 if (abs(K_squared) > 1e-12) {
+			// Otherwise solve the Helmholtz equation
+
+			// Switch to spherical coordinates
+			double R=sqrt(x[0]*x[0]+x[1]*x[1]);
+			
+			double theta;
+			theta=atan2(x[0],x[1]);
+			
+			// Argument for Bessel/Hankel functions
+			double kr = sqrt(K_squared)*R;  
+			
+			// Need half-order Bessel functions
+			double bessel_offset=0.5;
+
+			// Evaluate Bessel/Hankel functions
+			Vector<double> jv(N_terms);
+			Vector<double> yv(N_terms);
+			Vector<double> djv(N_terms);
+			Vector<double> dyv(N_terms);
+			double order_max_in=double(N_terms-1)+bessel_offset;
+			double order_max_out=0;
+			
+			// This function returns vectors containing 
+			// J_k(x), Y_k(x) and their derivatives
+			// up to k=order_max, with k increasing in
+			// integer increments starting with smallest
+			// positive value. So, e.g. for order_max=3.5
+			// jv[0] contains J_{1/2}(x),
+			// jv[1] contains J_{3/2}(x),
+			// jv[2] contains J_{5/2}(x),
+			// jv[3] contains J_{7/2}(x).
+			CRBond_Bessel::bessjyv(order_max_in,
+									kr,
+									order_max_out,
+									&jv[0],&yv[0],
+									&djv[0],&dyv[0]);
+			
+			// Assemble  exact solution (actually no need to add terms
+			// below i=N_fourier as Legendre polynomial would be zero anyway)
+			complex<double> u_ex(0.0,0.0);
+			for(unsigned i=N_fourier;i<N_terms;i++)
+			{
+				//Associated_legendre_functions
+				double p=Legendre_functions_helper::plgndr2(i,N_fourier,
+															cos(theta));
+				// Set exact solution
+				u_ex+=Coeff[i]*sqrt(MathematicalConstants::Pi/(2.0*kr))*(jv[i]+I*yv[i])*p;
+			}
+			
+			// Get the real & imaginary part of the result
+			u[0]=u_ex.real();
+			u[1]=u_ex.imag();
+
+		} else {
+
+			// Relabel coordinate variables
+			double R = x[0];
+			double Z = x[1];
+
+			// Z parameter
+			double m = 3.0;
+
+			// Argument of Bessel functions
+			complex<double> mr = I*m*R;
+
+			// Evaluate Bessel/Hankel functions
+			complex<double> jv(0.0,0.0);
+			complex<double> yv(0.0,0.0);
+			complex<double> djv(0.0,0.0);
+			complex<double> dyv(0.0,0.0);
+			double order_max_in=double(N_terms-1);
+			double order_max_out=0;
+			
+			// This function returns vectors containing 
+			// J_k(x), Y_k(x) and their derivatives
+			// up to k=order_max, with k increasing in
+			// integer increments starting with smallest
+			// positive value. So, e.g. for order_max=3.5
+			// jv[0] contains J_{1/2}(x),
+			// jv[1] contains J_{3/2}(x),
+			// jv[2] contains J_{5/2}(x),
+			// jv[3] contains J_{7/2}(x).
+			CRBond_Bessel::cbessjyva(order_max_in,
+									mr,
+									order_max_out,
+									&jv,&yv,
+									&djv,&dyv);
+
+			// exact solution
+			complex<double> u_ex(0.0,0.0);
+			u_ex += (jv+yv)*exp(I*m*Z);
+
+			// Get the real & imaginary part of the result
+			u[0]=u_ex.real();
+			u[1]=u_ex.imag();
+		} 
+	 }
   
  }//end of get_exact_u
 
@@ -375,25 +470,40 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
  // Open trace file
  Trace_file.open("RESLT/trace.dat");
 
- 
- // Build annular mesh
- // # of elements in r-direction 
- unsigned n_r=10;
- 
- // # of elements in theta-direction 
- unsigned n_theta=10;
- 
- // Domain boundaries in theta-direction
- double theta_min=-90.0;
- double theta_max=90.0;
- 
- // Domain boundaries in r-direction
- double r_min=1.0;
- double r_max=3.0;
- 
- // Build and assign mesh
- mesh_pt() = 
-  new AnnularQuadMesh<ELEMENT>(n_r,n_theta,r_min,r_max,theta_min,theta_max);
+ if (GlobalParameters::One_dimensional_test_problem == 1) 
+ {
+	 // Mesh for the one dimensional test problem
+	 mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(10,10,
+		GlobalParameters::R_min_test,GlobalParameters::R_max_test,
+		GlobalParameters::Z_min_test,GlobalParameters::Z_max_test);
+ }
+ else if (GlobalParameters::K_squared == 0.0)
+ {
+	// Create mesh for the Laplacian problem
+	mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(10,10,
+		GlobalParameters::R_min,GlobalParameters::R_max,
+		GlobalParameters::Z_min,GlobalParameters::Z_max);
+	
+ } else {
+	// Build annular mesh
+	// # of elements in r-direction 
+	unsigned n_r=10;
+	
+	// # of elements in theta-direction 
+	unsigned n_theta=10;
+	
+	// Domain boundaries in theta-direction
+	double theta_min=-90.0;
+	double theta_max=90.0;
+	
+	// Domain boundaries in r-direction
+	double r_min=1.0;
+	double r_max=3.0;
+	
+	// Build and assign mesh
+	mesh_pt() = 
+	new AnnularQuadMesh<ELEMENT>(n_r,n_theta,r_min,r_max,theta_min,theta_max);
+ }
 
  // Set the boundary conditions for this problem: All nodes are
  // free by default -- only need to pin the ones that have Dirichlet conditions
@@ -483,7 +593,6 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::set_gmres_multigrid_solver()
  solver_pt->max_iter()=200;
 
  // Set the tolerance (to ensure the Newton solver converges in one step)
- //solver_pt->tolerance()=1.0e-10;
  solver_pt->tolerance()=1.0e-10;
    
  // If the user wishes to document the convergence information
@@ -821,6 +930,9 @@ int main(int argc,char **argv)
  CommandLineArgs::specify_command_line_flag(
   "--conv_flag",&GlobalParameters::Doc_convergence_flag);
  
+ // Solve the 'thin' test problem, with no z dependence
+  CommandLineArgs::specify_command_line_flag(
+  "--1d_test",&GlobalParameters::One_dimensional_test_problem);
  
  // Parse command line
  CommandLineArgs::parse_and_assign();
