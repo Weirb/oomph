@@ -2,11 +2,134 @@ import numpy as np
 import matplotlib.pyplot as plt
 from abc import abstractmethod
 from enum import Enum
-
+from time import time
 
 debug = False
+plot_results = True
+
 
 def main():
+
+	# What problem are we solving?
+	poisson = False
+
+	# Setup constants
+	a = 1
+	b = a + 1
+
+	# Which solver?
+	solver = MGSolverEnum.TWO_GRID
+
+	problem_name = 'poisson' if poisson else 'variable'
+	output_filename = 'results_{}'.format(problem_name)
+	output_header = 'k,it_count,time,residual,abserror,relerror,solver\n'
+	out_file = open(output_filename,'w',1)
+	out_file.write(output_header)
+
+	# Store the results
+	residuals = []
+	abserrors = []
+	relerrors = []
+	iteration_counts = []
+	times = []
+	ks = range(3,8)
+
+	# Loop over the powers of 2
+	for k in ks:
+		print('Solving level: {}'.format(k))
+
+		# Create size specific parameters
+		n = 2 ** k + 1
+		h = 1 / (n + 1)
+
+		# Domain
+		x = np.linspace(a, b, n)
+		
+		if poisson: # POISSON PROBLEM
+			u_ex = x
+			alpha = u_ex[0]
+			beta = u_ex[-1]
+
+			f = np.zeros(n)
+			f[0] -= alpha / h ** 2
+			f[-1] -= beta / h ** 2
+				
+			problem = MGPoissonProblem([a,b], f, k)
+
+		else: # VARIABLE COEFFICIENT PROBLEM
+			u0, u1 = 1, 0
+			u_ex = u0*np.log(x) + u1
+
+			alpha = u_ex[0]
+			beta = u_ex[-1]
+
+			f = np.zeros(n)
+			f[0] -= alpha / h ** 2
+			f[-1] -= beta * (1 / (b) / h + 1 / h ** 2)
+
+			problem = MGVariableProblem([a,b], f, k)
+
+		# Solve the problem, with timing
+		start_time = time()
+		u, count = problem.solve(solver)
+		total_time = start_time - time()
+		
+		# Log all of the output
+		times.append(total_time)
+		iteration_counts.append(count)
+		
+		residual = np.linalg.norm(problem.A(u)-f)
+		residuals.append(residual)
+
+		abserror = np.linalg.norm(u_ex-u)
+		abserrors.append(abserror)
+
+		relerror = abserror/np.linalg.norm(u_ex)
+		relerrors.append(relerror)
+
+		# Write output to file
+		string = '{},{},{},{},{},{},{}\n'.format(k,count,total_time,residual,abserror,relerror,solver)
+		out_file.write(string)
+
+	# Close the file
+	out_file.close()
+
+	# Should we plot?
+	if plot_results:
+		plot(**{'ks':ks,
+				'residuals':residuals,
+				'relerrors':relerrors,
+				'abserrors':abserrors,
+				'iteration_counts':iteration_counts})
+	
+
+def plot(**kwargs):
+	if 'iteration_counts' in kwargs:
+		# First plot the iteration counts against problem size
+		ax = plt.subplot(211)
+		plt.plot(kwargs['ks'], kwargs['iteration_counts'], marker='o')
+		plt.xlabel('k')
+		plt.ylabel('Iteration count')
+		plt.title('Iteration counts')
+		plt.grid()
+
+	if 'relerrors' in kwargs and 'abserrors' in kwargs and 'residuals' in kwargs:
+		# Next plot the errors and residuals against problem size
+		ax = plt.subplot(212)
+		plt.plot(kwargs['ks'], kwargs['relerrors'], marker='o')
+		plt.plot(kwargs['ks'], kwargs['abserrors'], marker='o')
+		plt.plot(kwargs['ks'], kwargs['residuals'], marker='o')
+		plt.xlabel('k')
+		plt.ylabel('Magnitude')
+		plt.title('Errors and residuals')
+		plt.legend(["Relative Error", "Absolute Error", "Residual"])
+		plt.grid()
+		ax.set_yscale("log", nonposy='clip')
+	
+	plt.show()
+
+
+def test():
 
 	k = 6
 	n = 2 ** k + 1
@@ -63,7 +186,6 @@ def main():
 	plt.plot(x, u_ex)
 	plt.legend(["Multigrid", "Exact"])
 	plt.show()
-
 
 
 class MGBase:
