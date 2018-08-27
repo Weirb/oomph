@@ -179,27 +179,28 @@ namespace GlobalParameters
 	 // Avoid divide by 0 error with separate exact solution
 	 // Also avoid == comparison with double
 	 else {
-		 if (abs(K_squared) > 1e-12) {
-			// Otherwise solve the Helmholtz equation
+		 if (K_squared != 0.0) {
+			
+      // K^2 != 0
+      // This is the Helmholtz equation in Fourier decomposed coordinates
+      // We are soling for the N_fourier mode
 
-			// Switch to spherical coordinates
-			double R=sqrt(x[0]*x[0]+x[1]*x[1]);
+			double R = x[0];
+			double Z = x[1];
 			
-			double theta;
-			theta=atan2(x[0],x[1]);
-			
+      complex<double> u_ex(0.0, 0.0);
+
 			// Argument for Bessel/Hankel functions
-			double kr = sqrt(K_squared)*R;  
-			
-			// Need half-order Bessel functions
-			double bessel_offset=0.5;
+			double kr = sqrt(K_squared)*R;
+
+      N_terms = N_fourier + 1;
 
 			// Evaluate Bessel/Hankel functions
 			Vector<double> jv(N_terms);
 			Vector<double> yv(N_terms);
 			Vector<double> djv(N_terms);
 			Vector<double> dyv(N_terms);
-			double order_max_in=double(N_terms-1)+bessel_offset;
+			double order_max_in=double(N_terms-1);
 			double order_max_out=0;
 			
 			// This function returns vectors containing 
@@ -216,66 +217,39 @@ namespace GlobalParameters
 									order_max_out,
 									&jv[0],&yv[0],
 									&djv[0],&dyv[0]);
-			
-			// Assemble  exact solution (actually no need to add terms
-			// below i=N_fourier as Legendre polynomial would be zero anyway)
-			complex<double> u_ex(0.0,0.0);
-			for(unsigned i=N_fourier;i<N_terms;i++)
-			{
-				//Associated_legendre_functions
-				double p=Legendre_functions_helper::plgndr2(i,N_fourier,
-															cos(theta));
-				// Set exact solution
-				u_ex+=Coeff[i]*sqrt(MathematicalConstants::Pi/(2.0*kr))*(jv[i]+I*yv[i])*p;
-			}
-			
-			// Get the real & imaginary part of the result
+
+      u_ex += (jv[N_fourier]+I*yv[N_fourier])*Z;
+
+      // Get the real & imaginary part of the result
 			u[0]=u_ex.real();
 			u[1]=u_ex.imag();
 
-		} else {
+		} else if (K_squared == 0.0 && N_fourier != 0) {
 
-			// Relabel coordinate variables
+      // K^2 = 0, N_fourier != 0
+      // This is the Poisson problem in Fourier decomposed coordinates
+
+      // Variables for coordinates
 			double R = x[0];
 			double Z = x[1];
-
-			// Z parameter
-			double m = 3.0;
-
-			// Argument of Bessel functions
-			complex<double> mr = I*m*R;
-
-			// Evaluate Bessel/Hankel functions
-			complex<double> jv(0.0,0.0);
-			complex<double> yv(0.0,0.0);
-			complex<double> djv(0.0,0.0);
-			complex<double> dyv(0.0,0.0);
-			double order_max_in=double(N_terms-1);
-			double order_max_out=0;
 			
-			// This function returns vectors containing 
-			// J_k(x), Y_k(x) and their derivatives
-			// up to k=order_max, with k increasing in
-			// integer increments starting with smallest
-			// positive value. So, e.g. for order_max=3.5
-			// jv[0] contains J_{1/2}(x),
-			// jv[1] contains J_{3/2}(x),
-			// jv[2] contains J_{5/2}(x),
-			// jv[3] contains J_{7/2}(x).
-			CRBond_Bessel::cbessjyva(order_max_in,
-									mr,
-									order_max_out,
-									&jv,&yv,
-									&djv,&dyv);
+      // Exact solution
+      complex<double> u_ex(0.0, 0.0);
 
-			// exact solution
-			complex<double> u_ex(0.0,0.0);
-			u_ex += (jv+yv)*exp(I*m*Z);
+      // Add the exact solution to the 
+      u_ex += (cosh(N_fourier*log(R)) + I*sinh(N_fourier*log(R)))*Z;
 
+			
 			// Get the real & imaginary part of the result
 			u[0]=u_ex.real();
 			u[1]=u_ex.imag();
-		} 
+
+		} else if (0) {
+
+      // Need one more condition for when K^2=0 and N_fourier = 0.
+      // But we may actually ignore this case since we are not interested.
+
+    }
 	 }
   
  }//end of get_exact_u
@@ -477,32 +451,12 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
 		GlobalParameters::R_min_test,GlobalParameters::R_max_test,
 		GlobalParameters::Z_min_test,GlobalParameters::Z_max_test);
  }
- else if (GlobalParameters::K_squared == 0.0)
+ else
  {
 	// Create mesh for the Laplacian problem
 	mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(10,10,
 		GlobalParameters::R_min,GlobalParameters::R_max,
 		GlobalParameters::Z_min,GlobalParameters::Z_max);
-	
- } else {
-	// Build annular mesh
-	// # of elements in r-direction 
-	unsigned n_r=10;
-	
-	// # of elements in theta-direction 
-	unsigned n_theta=10;
-	
-	// Domain boundaries in theta-direction
-	double theta_min=-90.0;
-	double theta_max=90.0;
-	
-	// Domain boundaries in r-direction
-	double r_min=1.0;
-	double r_max=3.0;
-	
-	// Build and assign mesh
-	mesh_pt() = 
-	new AnnularQuadMesh<ELEMENT>(n_r,n_theta,r_min,r_max,theta_min,theta_max);
  }
 
  // Set the boundary conditions for this problem: All nodes are
@@ -846,7 +800,7 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::doc_solution()
  // Doc L2 error and norm of solution
  cout << "Norm of solution: " << sqrt(norm) << std::endl
  	 	  << "Norm of error   : " << sqrt(error) << std::endl
-   			<< "Relative error  : " << sqrt(error/norm) << std::endl;
+      << "Relative error  : " << sqrt(error/norm) << std::endl;
 
  // Increment the documentation number
  GlobalParameters::Doc_info.number()++;
