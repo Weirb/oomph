@@ -134,7 +134,8 @@ void PMLHelmholtzEquations<DIM>::
 
     // Jacobian for the Helmholtz term
     std::complex<double> k_squared_jacobian =
-      -alpha_factor*(k_squared()-nn/rr)*r*W;
+      // -alpha_factor*(k_squared()-nn/rr)*r*W;
+      (-alpha_factor*k_squared()-nn/rr)*r*W;
 
     // Jacobian for the Laplacian
     Vector<std::complex<double> > laplace_jacobian(2);
