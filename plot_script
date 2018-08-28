@@ -1,0 +1,7 @@
+set logscale xy
+plot "result_errors.dat" with linespoints
+
+replot x**3 with lines
+
+#f(x) = x**a 
+#fit f(x) "result_errors.dat" u 1:2 via a
