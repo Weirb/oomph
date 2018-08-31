@@ -244,13 +244,58 @@ namespace GlobalParameters
 			u[0]=u_ex.real();
 			u[1]=u_ex.imag();
 
-		} else if (0) {
+		} else if (K_squared == 0.0 && N_fourier == 0) {
+			
+      // This is the axisymmetric Poisson problem.
+
+			double R = x[0];
+			double Z = x[1];
+
+			double m = 3.0;
+			
+      complex<double> u_ex(0.0, 0.0);
+
+			// Argument for Bessel/Hankel functions
+			double kr = m*R;
+
+      N_terms = N_fourier + 1;
+
+			// Evaluate Bessel/Hankel functions
+			Vector<double> jv(N_terms);
+			Vector<double> yv(N_terms);
+			Vector<double> djv(N_terms);
+			Vector<double> dyv(N_terms);
+			double order_max_in=double(N_terms-1);
+			double order_max_out=0;
+			
+			// This function returns vectors containing 
+			// J_k(x), Y_k(x) and their derivatives
+			// up to k=order_max, with k increasing in
+			// integer increments starting with smallest
+			// positive value. So, e.g. for order_max=3.5
+			// jv[0] contains J_{1/2}(x),
+			// jv[1] contains J_{3/2}(x),
+			// jv[2] contains J_{5/2}(x),
+			// jv[3] contains J_{7/2}(x).
+			CRBond_Bessel::bessjyv(order_max_in,
+									kr,
+									order_max_out,
+									&jv[0],&yv[0],
+									&djv[0],&dyv[0]);
+
+      u_ex += (jv[N_fourier]+I*yv[N_fourier])*exp(m*Z);
+
+      // Get the real & imaginary part of the result
+			u[0]=u_ex.real();
+			u[1]=u_ex.imag();
+
+		}
 
       // Need one more condition for when K^2=0 and N_fourier = 0.
       // But we may actually ignore this case since we are not interested.
 
-    }
 	 }
+	 
   
  }//end of get_exact_u
 
