@@ -108,11 +108,6 @@ namespace GlobalParameters
  
  // Pointer to the output stream -- defaults to oomph_info
  std::ostream* Stream_pt;
-
- // Use the 1D test problem?
- // 	0 = standard problem, Helmholtz/Poisson
- //		1 = solve the test problem
- unsigned One_dimensional_test_problem = 0;
   
  /// Choose the value of the shift to create the complex-shifted
  /// Laplacian preconditioner (CSLP)
@@ -133,19 +128,8 @@ namespace GlobalParameters
  double Z_min = 0.0;
  double Z_max = Z_min + 1.0;
 
- // Mesh length in the R direction (test problem)
- double R_min_test = 1.0;
- double R_max_test = R_min_test + 1.0;
- 
- // Mesh length in the Z direction (test problem)
- double Z_min_test = -0.1;
- double Z_max_test = 0.1;
-
  // Number of terms in the solution
  unsigned N_terms = 6;
-
- /// Coefficients in the exact solution
- Vector<double> Coeff(N_terms,1.0);
 
  /// Imaginary unit 
  std::complex<double> I(0.0,1.0); 
@@ -153,47 +137,21 @@ namespace GlobalParameters
  /// Exact solution as a Vector of size 2, containing real and imag parts
  void get_exact_u(const Vector<double>& x, Vector<double>& u)
  {
+		if (K_squared != 0.0) {
 
-	 // Solve the one dimensional test problem
-	 if (One_dimensional_test_problem == 1){
-		
-		// Ensure parameters are set for this problem
-		N_fourier = 0;
-		K_squared = 0.0;
-		
-		// radial coordinate
-		double R=x[0];
-
-		// exact solution
-		complex<double> u_ex(0.0,0.0);
-
-		// Solution to (r*u'(r))'/r=0 is u(r)=A*log(r)+B
-		u_ex += 6.0*log(R) + 2.0;
-		
-		// Get the real & imaginary part of the result
-		u[0]=u_ex.real();
-		u[1]=u_ex.imag();
-	 }
-
-	 // We are solving the Poisson problem if k^2 = 0
-	 // Avoid divide by 0 error with separate exact solution
-	 // Also avoid == comparison with double
-	 else {
-		 if (K_squared != 0.0) {
-			
-      // K^2 != 0
-      // This is the Helmholtz equation in Fourier decomposed coordinates
-      // We are soling for the N_fourier mode
+			// K^2 != 0
+			// This is the Helmholtz equation in Fourier decomposed coordinates
+			// We are soling for the N_fourier mode
 
 			double R = x[0];
 			double Z = x[1];
-			
-      complex<double> u_ex(0.0, 0.0);
+
+			complex<double> u_ex(0.0, 0.0);
 
 			// Argument for Bessel/Hankel functions
 			double kr = sqrt(K_squared)*R;
 
-      N_terms = N_fourier + 1;
+			N_terms = N_fourier + 1;
 
 			// Evaluate Bessel/Hankel functions
 			Vector<double> jv(N_terms);
@@ -202,63 +160,63 @@ namespace GlobalParameters
 			Vector<double> dyv(N_terms);
 			double order_max_in=double(N_terms-1);
 			double order_max_out=0;
-			
+
 			// This function returns vectors containing 
 			// J_k(x), Y_k(x) and their derivatives
 			// up to k=order_max, with k increasing in
 			// integer increments starting with smallest
-			// positive value. So, e.g. for order_max=3.5
+			// positive value. So, e.g. for order_max=3.5						
 			// jv[0] contains J_{1/2}(x),
 			// jv[1] contains J_{3/2}(x),
 			// jv[2] contains J_{5/2}(x),
 			// jv[3] contains J_{7/2}(x).
 			CRBond_Bessel::bessjyv(order_max_in,
-									kr,
-									order_max_out,
-									&jv[0],&yv[0],
-									&djv[0],&dyv[0]);
+			kr,
+			order_max_out,
+			&jv[0],&yv[0],
+			&djv[0],&dyv[0]);
 
-      u_ex += (jv[N_fourier]+I*yv[N_fourier])*Z;
+			u_ex += (jv[N_fourier]+I*yv[N_fourier])*Z;
 
-      // Get the real & imaginary part of the result
+			// Get the real & imaginary part of the result
 			u[0]=u_ex.real();
 			u[1]=u_ex.imag();
 
 		} else if (K_squared == 0.0 && N_fourier != 0) {
 
-      // K^2 = 0, N_fourier != 0
-      // This is the Poisson problem in Fourier decomposed coordinates
+			// K^2 = 0, N_fourier != 0
+			// This is the Fourier decomposed Poisson problem
 
-      // Variables for coordinates
+			// Variables for coordinates
 			double R = x[0];
 			double Z = x[1];
-			
-      // Exact solution
-      complex<double> u_ex(0.0, 0.0);
 
-      // Add the exact solution to the 
-      u_ex += (cosh(N_fourier*log(R)) + I*sinh(N_fourier*log(R)))*Z;
+			// Exact solution
+			complex<double> u_ex(0.0, 0.0);
 
-			
+			// Add the exact solution to the 
+			u_ex += (cosh(N_fourier*log(R)) + I*sinh(N_fourier*log(R)))*Z;
+
+
 			// Get the real & imaginary part of the result
 			u[0]=u_ex.real();
 			u[1]=u_ex.imag();
 
 		} else if (K_squared == 0.0 && N_fourier == 0) {
-			
-      // This is the axisymmetric Poisson problem.
+
+			// This is the axisymmetric Poisson problem.
 
 			double R = x[0];
 			double Z = x[1];
 
 			double m = 3.0;
-			
-      complex<double> u_ex(0.0, 0.0);
+
+			complex<double> u_ex(0.0, 0.0);
 
 			// Argument for Bessel/Hankel functions
 			double kr = m*R;
 
-      N_terms = N_fourier + 1;
+			N_terms = N_fourier + 1;
 
 			// Evaluate Bessel/Hankel functions
 			Vector<double> jv(N_terms);
@@ -267,7 +225,7 @@ namespace GlobalParameters
 			Vector<double> dyv(N_terms);
 			double order_max_in=double(N_terms-1);
 			double order_max_out=0;
-			
+
 			// This function returns vectors containing 
 			// J_k(x), Y_k(x) and their derivatives
 			// up to k=order_max, with k increasing in
@@ -278,26 +236,19 @@ namespace GlobalParameters
 			// jv[2] contains J_{5/2}(x),
 			// jv[3] contains J_{7/2}(x).
 			CRBond_Bessel::bessjyv(order_max_in,
-									kr,
-									order_max_out,
-									&jv[0],&yv[0],
-									&djv[0],&dyv[0]);
+			kr,
+			order_max_out,
+			&jv[0],&yv[0],
+			&djv[0],&dyv[0]);
 
-      u_ex += (jv[N_fourier]+I*yv[N_fourier])*exp(m*Z);
+			u_ex += (jv[N_fourier]+I*yv[N_fourier])*exp(m*Z);
 
-      // Get the real & imaginary part of the result
+			// Get the real & imaginary part of the result
 			u[0]=u_ex.real();
 			u[1]=u_ex.imag();
 
 		}
-
-      // Need one more condition for when K^2=0 and N_fourier = 0.
-      // But we may actually ignore this case since we are not interested.
-
-	 }
-	 
-  
- }//end of get_exact_u
+	}//end of get_exact_u
 
 	FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
 
@@ -331,65 +282,6 @@ namespace Smoother_Factory_Function_Helper
   return new ComplexDampedJacobi<CRDoubleMatrix>(Omega);
  }
 } // End of Smoother_Factory_Function_Helper
-
-
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
-
-
-//========================================================================
-// AnnularQuadMesh, derived from SimpleRectangularQuadMesh.
-//========================================================================
-template<class ELEMENT> 
-class AnnularQuadMesh : public RefineableRectangularQuadMesh<ELEMENT>
-{
- 
-  public:
-
- // \short Constructor for angular mesh with n_r x n_phi 
- // 2D quad elements. Calls constructor for the underlying 
- // SimpleRectangularQuadMesh; then deforms the mesh so that it fits 
- // into the annular region bounded by the radii r_min and r_max
- // and angles (in degree) of phi_min and phi_max.
- AnnularQuadMesh(const unsigned& n_r, const unsigned& n_phi,
-                 const double& r_min, const double& r_max,
-                 const double& phi_min, const double& phi_max) :
-                 RectangularQuadMesh<ELEMENT>(n_r,n_phi,1.0,1.0,&Mesh::Default_TimeStepper),
-                 RefineableRectangularQuadMesh<ELEMENT>(n_r,n_phi,1.0,1.0,&Mesh::Default_TimeStepper)
-  {
-
-   // The constructor for the  SimpleRectangularQuadMesh has
-   // built the mesh with n_x x n_y = n_r x n_phi elements in the unit
-   // square. Let's reposition the nodal points so that the mesh
-   // gets mapped into the required annular region:
-
-   // Find out how many nodes there are
-   unsigned n_node=this->nnode();
-   
-   // Loop over all nodes
-   for (unsigned n=0;n<n_node;n++)
-    {
-     // Pointer to node:
-     Node* nod_pt=this->node_pt(n);
-     
-     // Get the x/y coordinates
-     double x_old=nod_pt->x(0);
-     double y_old=nod_pt->x(1);
-
-     // Map from the old x/y to the new r/phi:
-     double r=r_min+(r_max-r_min)*x_old;
-     double phi=(phi_min+(phi_max-phi_min)*y_old)*
-      MathematicalConstants::Pi/180.0;
-
-     // Set new nodal coordinates
-     nod_pt->x(0)=r*cos(phi);
-     nod_pt->x(1)=r*sin(phi);
-    }
-  }
-};
 
 
 
@@ -489,20 +381,10 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
  // Open trace file
  Trace_file.open("RESLT/trace.dat");
 
- if (GlobalParameters::One_dimensional_test_problem == 1) 
- {
-	 // Mesh for the one dimensional test problem
-	 mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(10,10,
-		GlobalParameters::R_min_test,GlobalParameters::R_max_test,
-		GlobalParameters::Z_min_test,GlobalParameters::Z_max_test);
- }
- else
- {
 	// Create mesh for the Laplacian problem
 	mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(10,10,
 		GlobalParameters::R_min,GlobalParameters::R_max,
 		GlobalParameters::Z_min,GlobalParameters::Z_max);
- }
 
  // Set the boundary conditions for this problem: All nodes are
  // free by default -- only need to pin the ones that have Dirichlet conditions
@@ -928,10 +810,6 @@ int main(int argc,char **argv)
  // Decide whether or not to display convergence information
  CommandLineArgs::specify_command_line_flag(
   "--conv_flag",&GlobalParameters::Doc_convergence_flag);
- 
- // Solve the 'thin' test problem, with no z dependence
-  CommandLineArgs::specify_command_line_flag(
-  "--1d_test",&GlobalParameters::One_dimensional_test_problem);
  
  // Parse command line
  CommandLineArgs::parse_and_assign();
