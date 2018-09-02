@@ -68,7 +68,7 @@ do
 		
 		# Get the number of dofs from the logs
 		DOFS=$(grep "Total time for linear solver" $file \
-		| sed -r 's/[0-9]+\.[0-9]+//g' \
+		| sed -r 's/[0-9]+\.?[0-9]*$//g' \
 		| sed -r 's/[^0-9]*//g')
 		
 		echo $TIME $DOFS >>"$OUT_FOLDER/superlu_time.dat"
