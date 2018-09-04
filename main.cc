@@ -128,6 +128,15 @@ namespace GlobalParameters
  double Z_min = 0.0;
  double Z_max = Z_min + 1.0;
 
+	// Number of elements in R direction
+	unsigned Nr = 10;
+
+	// Number of elements in Z direction
+	unsigned Nz = 10;
+
+	// Element width
+	double Element_width=(R_max-R_min)/double(Nr);
+
  // Number of terms in the solution
  unsigned N_terms = 6;
 
@@ -176,7 +185,7 @@ namespace GlobalParameters
 			&jv[0],&yv[0],
 			&djv[0],&dyv[0]);
 
-			u_ex += (jv[N_fourier]+I*yv[N_fourier])*Z;
+			u_ex += 10.0*(jv[N_fourier]+I*yv[N_fourier])*Z;
 
 			// Get the real & imaginary part of the result
 			u[0]=u_ex.real();
@@ -251,6 +260,29 @@ namespace GlobalParameters
 	}//end of get_exact_u
 
 	FiniteElement::SteadyExactSolutionFctPt exact_u_pt=&get_exact_u;
+
+	// Tolerance for inside pinned region
+	double Eps=1.0e-12;
+	
+	// Pinned region definition
+	double R_pinned_inner = R_min;
+	double R_pinned_outer = R_pinned_inner + 0.25;
+	double Z_pinned_lower = 0.375;
+	double Z_pinned_upper = 0.625;
+
+	// Are we in the pinned
+	bool is_in_pinned_region(const Vector<double>& x) {
+		return (x[0] >= R_pinned_inner &&
+						x[0] <= R_pinned_outer &&
+						x[1] >= Z_pinned_lower &&
+						x[1] <= Z_pinned_upper);
+	}
+
+	bool is_on_pinned_boundary(const Vector<double>& x){
+		return (((x[0] - R_pinned_outer) < Eps && (x[1] > Z_pinned_lower) && (x[1] < Z_pinned_upper)) ||
+						((x[1] - Z_pinned_lower) < Eps && (x[0] > R_pinned_inner) && (x[0] < R_pinned_outer)) ||
+						((x[1] - Z_pinned_upper) < Eps && (x[0] > R_pinned_inner) && (x[0] < R_pinned_outer)));
+	}
 
 } // End of namespace
 
@@ -382,7 +414,8 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
  Trace_file.open("RESLT/trace.dat");
 
 	// Create mesh for the Laplacian problem
-	mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(10,10,
+	mesh_pt() = new RefineableRectangularQuadMesh<ELEMENT>(
+		GlobalParameters::Nr, GlobalParameters::Nz,
 		GlobalParameters::R_min,GlobalParameters::R_max,
 		GlobalParameters::Z_min,GlobalParameters::Z_max);
 
@@ -407,15 +440,16 @@ PMLStructuredCubicHelmholtz<ELEMENT>::PMLStructuredCubicHelmholtz()
  // constructor: Pass pointer to source function
  unsigned n_element = mesh_pt()->nelement();
  for(unsigned i=0;i<n_element;i++)
-  {
-   // Upcast from GeneralsedElement to the present element
-   ELEMENT *el_pt = dynamic_cast<ELEMENT*>(mesh_pt()->element_pt(i));
+	{
+		// Upcast from GeneralsedElement to the present element
+		ELEMENT *el_pt = dynamic_cast<ELEMENT*>(mesh_pt()->element_pt(i));
 
-   //Set the source function pointer
-   el_pt->k_squared_pt()=&GlobalParameters::K_squared;
-	  el_pt->n_fourier_wavenumber_pt()=&GlobalParameters::N_fourier;
-  }
+		//Set the source function pointer
+		el_pt->k_squared_pt()=&GlobalParameters::K_squared;
+		el_pt->n_fourier_wavenumber_pt()=&GlobalParameters::N_fourier;
+	}
 
+	apply_boundary_conditions();
 
  // Setup equation numbering scheme
  cout <<"Number of equations: " << assign_eqn_numbers() << std::endl; 
@@ -582,33 +616,84 @@ void PMLStructuredCubicHelmholtz<ELEMENT>::apply_boundary_conditions()
  
  //Loop over the boundaries
  for(unsigned i=0;i<n_bound;i++)
-  {
-   // How many nodes are there on this boundary?
-   unsigned n_node = mesh_pt()->nboundary_node(i);
+	{
+		// How many nodes are there on this boundary?
+		unsigned n_node = mesh_pt()->nboundary_node(i);
 
-   // Loop over the nodes on boundary
-   for (unsigned n=0;n<n_node;n++)
-    {
-     // Get pointer to node
-     Node* nod_pt=mesh_pt()->boundary_node_pt(i,n);
+		// Loop over the nodes on boundary
+		for (unsigned n=0;n<n_node;n++)
+			{
+				// Get pointer to node
+				Node* nod_pt=mesh_pt()->boundary_node_pt(i,n);
 
-     // Extract nodal coordinates from node:
-     Vector<double> x(2);
-     x[0]=nod_pt->x(0);
-     x[1]=nod_pt->x(1);
+				// Extract nodal coordinates from node:
+				Vector<double> x(2);
+				x[0]=nod_pt->x(0);
+				x[1]=nod_pt->x(1);
 
-     // Compute the value of the exact solution at the nodal point
-     Vector<double> u(2);
-     GlobalParameters::get_exact_u(x,u);
+				// Compute the value of the exact solution at the nodal point
+				Vector<double> u(2);
+				GlobalParameters::get_exact_u(x,u);
 
-     // Assign the value to the one (and only) nodal value at this node
-     nod_pt->pin(0); 
-		   nod_pt->pin(1); 
+				// Assign the value to the one (and only) nodal value at this node
+				nod_pt->pin(0); 
+				nod_pt->pin(1); 
 
-     nod_pt->set_value(0,u[0]);
-		   nod_pt->set_value(1,u[1]);
-    }
-  } 
+				nod_pt->set_value(0,u[0]);
+				nod_pt->set_value(1,u[1]);
+			}
+	}
+
+		
+	Vector<double> s(2,0.0);
+	Vector<double> x(2,0.0);
+	Vector<double> u(2,0.0);
+	
+	unsigned n_element = mesh_pt()->nelement();
+
+	for(unsigned i=0;i<n_element;i++)
+	{
+		ELEMENT *el_pt = dynamic_cast<ELEMENT*>(mesh_pt()->element_pt(i));
+
+		el_pt->get_x(s,x);
+
+		if (GlobalParameters::is_in_pinned_region(x)){
+		// Calculate the number of nodes in the element
+		unsigned nnode=el_pt->nnode();
+
+		// Loop over all of the nodes in the element
+		for (unsigned i=0;i<nnode;i++)
+		{
+			// Create a node pointer to store the i-th node in the element
+			Node* node_pt=el_pt->node_pt(i);
+
+			// Get the spatial position of this node
+			for (unsigned k=0;k<2;k++)
+			{
+				// Store the k-th coordinate value in the vector, x
+				x[k]=node_pt->x(k);
+			}
+
+			// Get the exact solution at this (Eulerian) position
+			GlobalParameters::get_exact_u(x,u);
+
+			// Make sure each dof at this point is pinned (real and imaginary)
+			node_pt->pin(0);
+			node_pt->pin(1);
+
+			if (GlobalParameters::is_on_pinned_boundary(x)){
+				// Set the solution value at this point
+				node_pt->set_value(0,u[0]);
+				node_pt->set_value(1,u[1]);
+			} else {
+				// Set the solution value at this point
+				node_pt->set_value(0,0.0);
+				node_pt->set_value(1,0.0);
+			}
+			
+			}
+		}
+	}
 } // End of apply_boundary_conditions
 
 
